@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Search, Edit2, Save, X, CheckCircle, Plus, ChevronDown, ChevronRight, CalendarDays, Clock } from "lucide-react"; 
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Search, Edit2, Save, X, CheckCircle, Plus, ChevronDown, ChevronRight, CalendarDays, Clock, Filter } from "lucide-react"; 
 
-// --- INTERFACES ---
 interface Subtask {
   title: string;
   status: string;
   completion: number;
   remarks?: string;
-  // --- NEW SUBTASK FIELDS ADDED ---
   startDate?: string;
   dueDate?: string;
   endDate?: string;
@@ -28,14 +26,31 @@ interface Task {
   status: string;
   remarks?: string;
   subtasks?: Subtask[];
-  // --- TASK FIELDS ---
   startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
 }
 
-// --- TOAST COMPONENT (Unchanged) ---
+// 1. UPDATED: Add new presets to the type
+type DateFilterPreset = 
+    | "All" 
+    | "Today" 
+    | "Yesterday" 
+    | "Last 7 Days" 
+    | "Last 1 Month" 
+    | "Last 3 Months" // NEW
+    | "Last 6 Months" // NEW
+    | "Last 9 Months" // NEW
+    | "Last 1 Year" 
+    | "Specific Date";
+
+interface DateFilter {
+    preset: DateFilterPreset;
+    startDate: string;
+    endDate: string;
+}
+
 interface ToastProps {
   message: string;
   onClose: () => void;
@@ -76,17 +91,113 @@ const Toast: React.FC<ToastProps> = ({ message, onClose }) => {
   );
 };
 
-// --- MAIN COMPONENT ---
+// 2. UPDATED: Implement logic for new presets
+const getDatesForFilter = (preset: DateFilterPreset, customDate: string): { start: string, end: string } => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const formatDate = (date: Date): string => date.toISOString().split('T')[0];
+    
+    // Helper to get a date 'months' ago
+    const getDateMonthsAgo = (months: number): Date => {
+        const date = new Date(today);
+        date.setMonth(today.getMonth() - months);
+        // Correct for months with fewer days (e.g., if today is Jan 31, date.setMonth(today.getMonth() - 1) gives March 3)
+        if (date.getDate() < today.getDate()) {
+            date.setDate(1); // Set to 1st to then use setDate to get the correct date
+            date.setMonth(today.getMonth() - months);
+        }
+        return date;
+    }
+
+    switch (preset) {
+        case "Today":
+            return { start: formatDate(today), end: formatDate(today) };
+        case "Yesterday":
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            return { start: formatDate(yesterday), end: formatDate(yesterday) };
+        case "Last 7 Days":
+            const last7Days = new Date(today);
+            last7Days.setDate(today.getDate() - 6);
+            return { start: formatDate(last7Days), end: formatDate(today) };
+        case "Last 1 Month":
+            const last1Month = getDateMonthsAgo(1);
+            return { start: formatDate(last1Month), end: formatDate(today) };
+        case "Last 3 Months": // NEW LOGIC
+            const last3Months = getDateMonthsAgo(3);
+            return { start: formatDate(last3Months), end: formatDate(today) };
+        case "Last 6 Months": // NEW LOGIC
+            const last6Months = getDateMonthsAgo(6);
+            return { start: formatDate(last6Months), end: formatDate(today) };
+        case "Last 9 Months": // NEW LOGIC
+            const last9Months = getDateMonthsAgo(9);
+            return { start: formatDate(last9Months), end: formatDate(today) };
+        case "Last 1 Year":
+            const last1Year = getDateMonthsAgo(12);
+            return { start: formatDate(last1Year), end: formatDate(today) };
+        case "Specific Date":
+            const specificDate = customDate || formatDate(today);
+            return { start: specificDate, end: specificDate };
+        case "All":
+        default:
+            return { start: "", end: "" };
+    }
+};
+
+const isTaskInDateRange = (taskDate: string, startDate: string, endDate: string): boolean => {
+    const taskDateOnly = taskDate.split('T')[0];
+    
+    const taskTime = new Date(taskDateOnly).getTime();
+    
+    const end = new Date(endDate);
+    end.setDate(end.getDate() + 1); 
+    const endTime = end.getTime();
+
+    const startTime = new Date(startDate).getTime();
+
+    return taskTime >= startTime && taskTime < endTime;
+};
+
+
 const ViewTaskPage: React.FC = () => {
   const [empId, setEmpId] = useState("");
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [successToast, setSuccessToast] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  
+  const [dateFilter, setDateFilter] = useState<DateFilter>({
+      preset: "Last 7 Days",
+      startDate: getDatesForFilter("Last 7 Days", "").start,
+      endDate: getDatesForFilter("Last 7 Days", "").end,
+  });
 
-  // --- TOGGLE SUBTASKS (Unchanged) ---
+
+  const filterTasks = useCallback((taskList: Task[], currentFilter: DateFilter) => {
+    if (currentFilter.preset === "All") {
+        return taskList;
+    }
+    
+    const { start, end } = getDatesForFilter(currentFilter.preset, currentFilter.startDate);
+
+    if (!start || !end) {
+        return taskList;
+    }
+
+    return taskList.filter(task => 
+        isTaskInDateRange(task.date, start, end)
+    );
+  }, []);
+
+  useEffect(() => {
+      setTasks(filterTasks(allTasks, dateFilter));
+  }, [allTasks, dateFilter, filterTasks]);
+
+
   const toggleSubtasks = (taskId: string) => {
     setExpandedTasks((prev) => {
       const newSet = new Set(prev);
@@ -99,10 +210,37 @@ const ViewTaskPage: React.FC = () => {
     });
   };
 
-  // --- FETCH TASKS (Unchanged) ---
+  const handleDateFilterChange = (
+    e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>
+  ) => {
+    const { name, value } = e.target;
+    
+    if (name === "preset") {
+        const newPreset = value as DateFilterPreset;
+        const { start, end } = getDatesForFilter(newPreset, dateFilter.startDate);
+        
+        setDateFilter({
+            preset: newPreset,
+            startDate: newPreset === "Specific Date" ? dateFilter.startDate : start,
+            endDate: newPreset === "Specific Date" ? dateFilter.endDate : end,
+        });
+
+    } else if (name === "startDate" || name === "endDate") {
+        if (dateFilter.preset === "Specific Date") {
+             setDateFilter(prev => ({ 
+                ...prev, 
+                [name]: value,
+                endDate: name === "startDate" && value > prev.endDate ? value : prev.endDate
+            }));
+        }
+    }
+  };
+
+
   const handleFetch = async () => {
     if (!empId) {
       setMessage("Please enter Employee ID");
+      setAllTasks([]);
       setTasks([]);
       return;
     }
@@ -111,13 +249,16 @@ const ViewTaskPage: React.FC = () => {
     setMessage("");
 
     try {
+      // NOTE: You'll need to replace this with your actual API endpoint
       const res = await fetch(`/api/tasks/getByEmpId?empId=${empId}`);
       const data = await res.json();
 
       if (res.ok) {
-        setTasks(data.tasks);
-        setMessage(data.tasks.length === 0 ? "No tasks found for this employee." : "");
+        const fetchedTasks = data.tasks || [];
+        setAllTasks(fetchedTasks);
+        setMessage(fetchedTasks.length === 0 ? "No tasks found for this employee." : "");
       } else {
+        setAllTasks([]);
         setTasks([]);
         setMessage(data.error || "Failed to fetch tasks");
       }
@@ -129,7 +270,6 @@ const ViewTaskPage: React.FC = () => {
     }
   };
 
-  // --- EDIT HANDLERS ---
   const handleEdit = (task: Task) => {
     setEditingTask(task);
   };
@@ -145,7 +285,6 @@ const ViewTaskPage: React.FC = () => {
     if (!editingTask) return;
     const updatedSubtasks = [
       ...(editingTask.subtasks || []),
-      // Initializing new subtask with new fields
       { title: "", status: "Pending", completion: 0, remarks: "", startDate: "", dueDate: "", endDate: "", timeSpent: "" },
     ];
     setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
@@ -164,7 +303,6 @@ const ViewTaskPage: React.FC = () => {
     setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
   };
 
-  // --- CRITICAL CHANGE HERE ---
   const handleSave = async () => {
     if (!editingTask) return;
     setLoading(true);
@@ -178,6 +316,7 @@ const ViewTaskPage: React.FC = () => {
     }
 
     try {
+      // NOTE: You'll need to replace this with your actual API endpoint
       const res = await fetch(`/api/tasks/update/${editingTask._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -190,7 +329,7 @@ const ViewTaskPage: React.FC = () => {
         setEditingTask(null);
         setSuccessToast("Task updated successfully! Refreshing data...");
         
-        // CRITICAL FIX: Force re-fetch of all tasks to get fresh data
+        // Refetch all tasks to update the list
         await handleFetch(); 
 
       } else {
@@ -211,15 +350,12 @@ const ViewTaskPage: React.FC = () => {
     setMessage("");
   };
 
-  // --- TASK RENDERERS (Updated colSpan to 16) ---
   const RenderTaskRow = (task: Task, idx: number) => {
     const isExpanded = expandedTasks.has(task._id);
     const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
-    // We need 16 columns for the main task row
     const mainColSpan = 16; 
 
-    // We need 9 columns for the subtask table header
     const subtaskHeaderColSpan = 9; 
     
     return (
@@ -268,7 +404,6 @@ const ViewTaskPage: React.FC = () => {
           </td>
           <td className="px-6 py-4 text-sm text-gray-500">{task.remarks || "-"}</td>
           
-          {/* --- MAIN TASK DISPLAY FIELDS --- */}
           <td className="px-6 py-4 text-sm text-gray-600">{task.startDate ? task.startDate.split("T")[0] : "-"}</td>
           <td className="px-6 py-4 text-sm text-gray-600">{task.dueDate ? task.dueDate.split("T")[0] : "-"}</td>
           <td className="px-6 py-4 text-sm text-gray-600">{task.endDate ? task.endDate.split("T")[0] : "-"}</td>
@@ -287,7 +422,6 @@ const ViewTaskPage: React.FC = () => {
           </td>
         </tr>
 
-        {/* --- SUBTASK DISPLAY --- */}
         {hasSubtasks && isExpanded && (
           <tr className="bg-blue-50">
             <td colSpan={mainColSpan} className="px-6 py-4"> 
@@ -306,12 +440,10 @@ const ViewTaskPage: React.FC = () => {
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300">Status</th>
                         <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700 border-r border-gray-300">Completion</th>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300">Remarks</th>
-                        {/* --- NEW SUBTASK HEADERS --- */}
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><Clock className="inline w-3 h-3 mr-1"/>Time</th>
-                        {/* --------------------------- */}
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Type</th>
                       </tr>
                     </thead>
@@ -334,12 +466,10 @@ const ViewTaskPage: React.FC = () => {
                           </td>
                           <td className="px-4 py-2 text-sm text-center font-medium text-gray-800 border-r border-gray-300">{st.completion}%</td>
                           <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.remarks || "-"}</td>
-                          {/* --- NEW SUBTASK DATA CELLS --- */}
                           <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.startDate ? st.startDate.split("T")[0] : "-"}</td>
                           <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.dueDate ? st.dueDate.split("T")[0] : "-"}</td>
                           <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.endDate ? st.endDate.split("T")[0] : "-"}</td>
                           <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.timeSpent || "-"}</td>
-                          {/* ------------------------------ */}
                           <td className="px-4 py-2 text-sm font-semibold text-purple-700">Subtask</td>
                         </tr>
                       ))}
@@ -354,7 +484,6 @@ const ViewTaskPage: React.FC = () => {
     );
   };
 
-  // --- EDIT MODE (Updated subtask section for new fields) ---
   const RenderEditRow = (task: Task) => (
     <>
       <tr key={task._id} className="bg-blue-50 border-b border-blue-200">
@@ -420,7 +549,6 @@ const ViewTaskPage: React.FC = () => {
           />
         </td>
         
-        {/* --- MAIN TASK EDIT FIELDS --- */}
         <td className="px-3 py-2">
           <input
             name="startDate"
@@ -480,7 +608,6 @@ const ViewTaskPage: React.FC = () => {
         </td>
       </tr>
 
-      {/* --- SUBTASK EDIT --- */}
       <tr>
         <td colSpan={16} className="px-4 py-4 bg-gray-50 border-t border-blue-200">
           <div className="flex items-center justify-between mb-2">
@@ -502,7 +629,6 @@ const ViewTaskPage: React.FC = () => {
             {task.subtasks?.map((subtask, index) => (
               <div
                 key={index}
-                // Updated to handle 4 extra fields: title, status, completion, remarks, start, due, end, timeSpent, delete button (9 items)
                 className="flex items-center gap-3 bg-white border rounded-lg px-3 py-2 text-xs" 
               >
                 <input
@@ -540,7 +666,6 @@ const ViewTaskPage: React.FC = () => {
                   className="flex-1 border border-gray-300 rounded px-2 py-1 text-gray-800"
                 />
                 
-                {/* --- NEW SUBTASK EDIT INPUTS --- */}
                 <input
                   type="date"
                   placeholder="Start"
@@ -569,7 +694,6 @@ const ViewTaskPage: React.FC = () => {
                   onChange={(e) => handleSubtaskChange(index, "timeSpent", e.target.value)}
                   className="w-20 border border-gray-300 rounded px-2 py-1"
                 />
-                {/* ------------------------------- */}
 
                 <button
                   onClick={() => handleDeleteSubtask(index)}
@@ -592,10 +716,10 @@ const ViewTaskPage: React.FC = () => {
         <div className="max-w-7xl mx-auto mt-[15%] px-6 py-8">
           <h1 className="text-4xl font-bold text-white mb-10">Employee Tasks</h1>
 
-          {/* Filters */}
           <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <div className="flex gap-4 items-end max-w-lg mx-auto md:max-w-none">
-              <div className="flex-1">
+            <div className="flex flex-col md:flex-row gap-4 md:items-end">
+              
+              <div className="flex-1 min-w-[200px]">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   <Search className="inline w-4 h-4 mr-2" /> Employee ID
                 </label>
@@ -608,9 +732,67 @@ const ViewTaskPage: React.FC = () => {
                   onKeyDown={(e) => e.key === "Enter" && handleFetch()}
                 />
               </div>
+
+              <div className="min-w-[200px]">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Filter className="inline w-4 h-4 mr-2" /> Date Filter
+                </label>
+                <select
+                  name="preset"
+                  value={dateFilter.preset}
+                  onChange={handleDateFilterChange}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
+                  disabled={loading}
+                >
+                    <option value="Last 7 Days">Last 7 Days (Default)</option>
+                    <option value="All">All Tasks</option>
+                    <option value="Today">Today</option>
+                    <option value="Yesterday">Yesterday</option>
+                    <option value="Last 1 Month">Last 1 Month</option>
+                    <option value="Last 3 Months">Last 3 Months</option> {/* ADDED */}
+                    <option value="Last 6 Months">Last 6 Months</option> {/* ADDED */}
+                    <option value="Last 9 Months">Last 9 Months</option> {/* ADDED */}
+                    <option value="Last 1 Year">Last 1 Year</option>
+                    <option value="Specific Date">Specific Date Range</option>
+                </select>
+              </div>
+
+              {dateFilter.preset === "Specific Date" && (
+                <>
+                  <div className="min-w-[140px]">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Start Date
+                    </label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      value={dateFilter.startDate}
+                      onChange={handleDateFilterChange}
+                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="min-w-[140px]">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        End Date
+                    </label>
+                    <input
+                      type="date"
+                      name="endDate"
+                      value={dateFilter.endDate}
+                      onChange={handleDateFilterChange}
+                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
+                      disabled={loading}
+                      min={dateFilter.startDate}
+                    />
+                  </div>
+                </>
+              )}
+
+
               <button
                 onClick={handleFetch}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition duration-200 shadow-md h-[42px]"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition duration-200 shadow-md h-[42px] mt-2 md:mt-0"
                 style={{ whiteSpace: "nowrap" }}
                 disabled={loading}
               >
@@ -619,7 +801,6 @@ const ViewTaskPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Message */}
           {message && (
             <div
               className={`bg-white border ${
@@ -632,7 +813,6 @@ const ViewTaskPage: React.FC = () => {
             </div>
           )}
 
-          {/* Table */}
           {tasks.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 shadow-xl overflow-hidden">
               <div className="overflow-x-auto">
@@ -649,12 +829,10 @@ const ViewTaskPage: React.FC = () => {
                       <th className="px-6 py-4 text-center text-sm font-semibold text-gray-800">%</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Remarks</th>
-                      {/* --- MAIN TASK HEADERS --- */}
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Start Date</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Due Date</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>End Date</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><Clock className="inline w-4 h-4 mr-1"/>Time Spent</th>
-                      {/* -------------------- */}
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Type</th>
                       <th className="px-6 py-4 text-center text-sm font-semibold text-gray-800">Actions</th>
                     </tr>
@@ -669,6 +847,11 @@ const ViewTaskPage: React.FC = () => {
                 </table>
               </div>
             </div>
+          )}
+          {tasks.length === 0 && allTasks.length > 0 && !message && (
+             <div className="bg-white border border-yellow-500 text-yellow-700 px-4 py-3 rounded-lg mb-6 font-medium">
+                No tasks found for the selected date filter: **{dateFilter.preset}** ({dateFilter.preset === "Specific Date" ? `${dateFilter.startDate} to ${dateFilter.endDate}` : getDatesForFilter(dateFilter.preset, dateFilter.startDate).start + ' to ' + getDatesForFilter(dateFilter.preset, dateFilter.startDate).end}).
+             </div>
           )}
         </div>
       </div>

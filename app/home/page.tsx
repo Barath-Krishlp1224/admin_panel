@@ -1,29 +1,94 @@
-"use client"
-import React, { useState } from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation"; 
+
+type Role = "Admin" | "Manager" | "Employee" | null;
+
+// Custom hook to handle asynchronous localStorage access
+const useAuthRole = () => {
+    const [userRole, setUserRole] = useState<Role>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const role = localStorage.getItem("userRole") as Role;
+            setUserRole(role);
+        }
+        setIsLoading(false); 
+    }, []);
+
+    return { userRole, isLoading }; 
+};
 
 const HomePage: React.FC = () => {
   const [showEmployeePopup, setShowEmployeePopup] = useState(false);
+  const router = useRouter();
+  
+  const { userRole, isLoading } = useAuthRole();
+
+  // FIX: Place useEffect at the top level to handle redirection after loading
+  useEffect(() => {
+    if (!isLoading && !userRole) {
+        // Redirect to the root/login page if not authenticated
+        router.replace("/"); 
+    }
+  }, [isLoading, userRole, router]); 
 
   const roles = [
     {
       name: "Admin",
       href: "/admin",
       image: "/admin.jpg",
+      // Accessible only by Admin
+      allowedRoles: ["Admin"],
     },
     {
       name: "Manager",
       href: "/manager",
       image: "/manager.jpg",
+      // Accessible by Admin and Manager
+      allowedRoles: ["Admin", "Manager"],
     },
     {
       name: "Employees",
       href: "/employees",
       image: "/employee.jpg",
+      // Accessible by Admin, Manager, and Employee
+      allowedRoles: ["Admin", "Manager", "Employee"],
     },
   ];
 
+  const hasAccess = (allowedRoles: string[]) => {
+    return userRole && allowedRoles.includes(userRole);
+  };
+
+  const visibleRoles = roles.filter(role => hasAccess(role.allowedRoles));
+  
+  // Show loading screen while checking local storage
+  if (isLoading) {
+      return (
+        <div className="text-center p-10 min-h-screen flex flex-col items-center justify-center">
+            <h2 className="text-2xl font-bold text-slate-700">Loading Access...</h2>
+            <p className="text-slate-500">Please wait.</p>
+        </div>
+      );
+  }
+
+  // Show Access Denied message if no role is found after loading
+  if (!userRole) {
+      // The useEffect hook above will handle the actual redirection
+      return (
+        <div className="text-center p-10 min-h-screen flex flex-col items-center justify-center">
+            <h2 className="text-2xl font-bold text-red-500">Access Denied</h2>
+            <p className="text-slate-600">You must be logged in to view the portals.</p>
+        </div>
+      );
+  }
+
+  // Render the full page once authenticated
   return (
     <div className="relative w-[95%] sm:w-[92%] md:w-[90%] ml-[2.5%] sm:ml-[4%] md:ml-[5%] h-[75vh] xs:h-[70vh] sm:h-[65vh] md:h-[60vh] mt-[35%] xs:mt-[30%] sm:mt-[22%] md:mt-[15%] overflow-hidden rounded-xl sm:rounded-2xl">
       <video
@@ -47,8 +112,12 @@ const HomePage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 xs:gap-3.5 sm:gap-4 md:gap-6 h-full items-center">
-          {roles.map((role) => (
+        <div className={`grid gap-3 xs:gap-3.5 sm:gap-4 md:gap-6 h-full items-center`}
+             style={{
+                gridTemplateColumns: visibleRoles.length > 0 ? `repeat(auto-fit, minmax(200px, 1fr))` : 'none'
+             }}
+        >
+          {visibleRoles.map((role) => (
             <div key={role.name}>
               {role.name === "Employees" ? (
                 <div
@@ -104,9 +173,16 @@ const HomePage: React.FC = () => {
             </div>
           ))}
         </div>
+        
+        {visibleRoles.length === 0 && (
+            <div className="text-center p-10">
+                <h3 className="text-xl font-bold text-white bg-black/50 p-4 rounded-xl">
+                    Your role currently has no portals assigned.
+                </h3>
+            </div>
+        )}
       </div>
 
-      {/* Popup Modal */}
       {showEmployeePopup && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"

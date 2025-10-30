@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type Role = "Admin" | "Manager" | "Employee" | "";
+
 export default function LoginSignupPage() {
   const [isSignup, setIsSignup] = useState(false);
   const [form, setForm] = useState({ 
@@ -12,10 +14,10 @@ export default function LoginSignupPage() {
     password: "" 
   });
   const [confirmPassword, setConfirmPassword] = useState(""); 
+  const [role, setRole] = useState<Role>(""); 
   const [error, setError] = useState("");
   const router = useRouter();
 
-  // Corrected: Form event type is React.FormEvent
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -28,6 +30,10 @@ export default function LoginSignupPage() {
     if (isSignup) {
       if (!form.email) { 
         setError("Email is required for signup.");
+        return;
+      }
+      if (!role) { 
+        setError("Role is required for signup.");
         return;
       }
       if (form.password !== confirmPassword) {
@@ -45,10 +51,10 @@ export default function LoginSignupPage() {
           name: form.name, 
           empId: form.empId, 
           email: form.email,
-          password: form.password 
+          password: form.password,
+          role: role, 
         };
       } else {
-        // Assuming login uses empId for the identifier field
         payload = { 
           empIdOrEmail: form.empId, 
           password: form.password 
@@ -62,14 +68,37 @@ export default function LoginSignupPage() {
       });
 
       const data = await res.json();
-
+      
       if (!res.ok) {
         setError(data.error || "Something went wrong");
         return;
       }
 
       alert(data.message);
-      router.push("/home");
+
+      if (!isSignup) {
+        // Successful Login Logic
+        if (data.user && data.user.role) { 
+            // Save the user's role to local storage
+            localStorage.setItem("userRole", data.user.role);
+        } else {
+             // This branch indicates a backend data issue (missing role)
+             setError("Login successful but user role data is missing."); 
+             return;
+        }
+        
+        // Redirect to home page
+        router.push("/home");
+        return; 
+
+      } else {
+        // Successful Signup: reset fields and switch to Login view
+        setIsSignup(false);
+        setForm({ name: "", empId: "", email: "", password: "" });
+        setConfirmPassword(""); 
+        setRole(""); 
+      }
+      
     } catch (err) {
       console.error(err);
       setError("Network error. Try again later.");
@@ -81,6 +110,7 @@ export default function LoginSignupPage() {
     setError("");
     setForm({ name: "", empId: "", email: "", password: "" });
     setConfirmPassword(""); 
+    setRole(""); 
   };
 
   return (
@@ -104,10 +134,8 @@ export default function LoginSignupPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* 🚀 Horizontal Grouping for Full Name and Employee ID (Signup) 🚀 */}
           {isSignup && (
             <div className="flex flex-col sm:flex-row gap-4">
-                {/* Full Name */}
                 <div className="relative flex-1">
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
                     <input
@@ -115,13 +143,11 @@ export default function LoginSignupPage() {
                         placeholder="John Doe"
                         value={form.name}
                         onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        // ✨ Added text-slate-900 for typed input text color
                         className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
                         required
                     />
                 </div>
                 
-                {/* Employee ID (Signup) */}
                 <div className="relative flex-1">
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Employee ID</label>
                     <input
@@ -129,7 +155,6 @@ export default function LoginSignupPage() {
                         placeholder="EMP12345"
                         value={form.empId}
                         onChange={(e) => setForm({ ...form, empId: e.target.value })}
-                        // ✨ Added text-slate-900 for typed input text color
                         className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
                         required
                     />
@@ -137,16 +162,14 @@ export default function LoginSignupPage() {
             </div>
           )}
 
-          {/* Employee ID (Full Width for Login) */}
           {!isSignup && (
             <div className="relative">
                 <label className="block text-sm font-medium text-slate-700 mb-2">Employee ID</label>
                 <input
                     type="text"
-                    placeholder="EMP12345"
+                    placeholder="EMP12345 or Email"
                     value={form.empId}
                     onChange={(e) => setForm({ ...form, empId: e.target.value })}
-                    // ✨ Added text-slate-900 for typed input text color
                     className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
                     required
                 />
@@ -154,23 +177,37 @@ export default function LoginSignupPage() {
           )}
 
           {isSignup && (
-            <div className="relative">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
-              <input
-                type="email"
-                placeholder="john.doe@company.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                // ✨ Added text-slate-900 for typed input text color
-                className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
-                required
-              />
-            </div>
+            <>
+              <div className="relative">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="john.doe@company.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Select Role</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Role)}
+                  className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all"
+                  required
+                >
+                  <option value="" disabled>Choose your role...</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Employee">Employee</option>
+                </select>
+              </div>
+            </>
           )}
 
-          {/* 🚀 Horizontal Grouping for Password and Confirm Password 🚀 */}
           <div className={`flex flex-col gap-4 ${isSignup ? 'sm:flex-row' : ''}`}>
-             {/* Password */}
             <div className="relative flex-1">
               <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
               <input
@@ -178,13 +215,11 @@ export default function LoginSignupPage() {
                 placeholder="••••••••"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                // ✨ Added text-slate-900 for typed input text color
                 className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
                 required
               />
             </div>
             
-            {/* Confirm Password (only visible/grouped during Signup) */}
             {isSignup && (
                 <div className="relative flex-1">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Confirm Password</label>
@@ -193,7 +228,6 @@ export default function LoginSignupPage() {
                         placeholder="••••••••"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        // ✨ Added text-slate-900 for typed input text color
                         className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
                         required
                     />

@@ -3,15 +3,15 @@
 import React, { useState } from "react";
 
 const EmployeesPage: React.FC = () => {
+  // 1. State: 'name' is removed.
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split("T")[0],
-    empId: "",
+    startDate: new Date().toISOString().split("T")[0], // Default to today
+    endDate: "",
+    dueDate: "",
+    empId: "", // This is now the only required field
     project: "",
-    name: "",
-    plan: "",
-    done: "",
-    completion: "",
-    status: "In Progress",
+    completion: "", 
+    status: "In Progress", // Has a default value
     remarks: "",
   });
 
@@ -25,6 +25,12 @@ const EmployeesPage: React.FC = () => {
     e.preventDefault();
 
     try {
+      // Client-side check for the *only* required field: empId
+      if (!formData.empId) {
+        setMessage("⚠️ Employee ID is a mandatory field and cannot be empty.");
+        return; // Stop submission
+      }
+
       const res = await fetch("/api/tasks/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -35,13 +41,13 @@ const EmployeesPage: React.FC = () => {
 
       if (res.ok) {
         setMessage("Task submitted successfully!");
+        // 2. Reset form data on successful submission
         setFormData({
-          date: new Date().toISOString().split("T")[0],
+          startDate: new Date().toISOString().split("T")[0],
+          endDate: "",
+          dueDate: "",
           empId: "",
           project: "",
-          name: "",
-          plan: "",
-          done: "",
           completion: "",
           status: "In Progress",
           remarks: "",
@@ -60,7 +66,6 @@ const EmployeesPage: React.FC = () => {
       <div className="mx-auto max-w-5xl">
         {/* Header Section */}
         <div className="text-center mt-[3%] mb-8">
-         
           <h1 className="text-4xl font-bold text-white mb-2">
             Employee Task Entry
           </h1>
@@ -93,24 +98,11 @@ const EmployeesPage: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Date */}
-              <div className="group">
-                <label className="block text-sm font-semibold text-black mb-2">
-                  📅 Date
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
-                />
-              </div>
 
-              {/* Employee ID */}
+              {/* Employee ID (REQUIRED) - Added 'required' */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  🆔 Employee ID
+                  🆔 Employee ID **(Required)**
                 </label>
                 <input
                   type="text"
@@ -119,14 +111,17 @@ const EmployeesPage: React.FC = () => {
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
                   placeholder="Enter your employee ID"
-                  required
+                  required // This is the only required field
                 />
               </div>
+              
+              {/* Spacer for layout adjustment */}
+              <div className="group hidden md:block"></div> 
 
-              {/* Project Name */}
-              <div className="group">
+              {/* Project Name (Optional) - Removed 'required' */}
+              <div className="group md:col-span-2">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  📁 Project Name
+                  📁 Project Name (Optional)
                 </label>
                 <input
                   type="text"
@@ -135,62 +130,55 @@ const EmployeesPage: React.FC = () => {
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
                   placeholder="Enter project name"
-                  required
                 />
               </div>
 
-              {/* Name */}
+              {/* Start Date (Optional) - Removed 'required' */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  👤 Your Name
+                  ▶️ Start Date (Optional)
                 </label>
                 <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
+                  type="date"
+                  name="startDate"
+                  value={formData.startDate}
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
-                  placeholder="Enter your full name"
-                  required
                 />
               </div>
 
-              {/* Plan for today */}
+              {/* End Date (Optional) */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  🎯 Plan for Today
+                  🛑 End Date (Expected/Actual - Optional)
                 </label>
                 <input
-                  type="text"
-                  name="plan"
-                  value={formData.plan}
+                  type="date"
+                  name="endDate"
+                  value={formData.endDate}
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
-                  placeholder="What do you plan to accomplish?"
-                  required
                 />
               </div>
 
-              {/* What did you do today */}
+              {/* Due Date (Optional) - Removed 'required' */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  ✅ Tasks Completed
+                  ⏳ Due Date (Optional)
                 </label>
                 <input
-                  type="text"
-                  name="done"
-                  value={formData.done}
+                  type="date"
+                  name="dueDate"
+                  value={formData.dueDate}
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
-                  placeholder="What did you accomplish today?"
-                  required
                 />
               </div>
-
-              {/* Completion % */}
+              
+              {/* Completion % (Optional) - Removed 'required' */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  📊 Completion Percentage
+                  📊 Completion Percentage (Optional)
                 </label>
                 <div className="relative">
                   <input
@@ -200,7 +188,6 @@ const EmployeesPage: React.FC = () => {
                     onChange={handleChange}
                     className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 pr-10 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none"
                     placeholder="0 - 100"
-                    required
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-black font-semibold">
                     %
@@ -208,10 +195,10 @@ const EmployeesPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Status */}
+              {/* Status (Optional - has default value) - Removed 'required' */}
               <div className="group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  🔄 Status
+                  🔄 Status (Optional)
                 </label>
                 <select
                   name="status"
@@ -219,17 +206,17 @@ const EmployeesPage: React.FC = () => {
                   onChange={handleChange}
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-black focus:border-black focus:ring-2 focus:ring-gray-200 transition-all outline-none bg-white cursor-pointer"
                 >
-                  <option>In Progress</option>
-                  <option>Paused</option>
-                  <option>Completed</option>
-                  <option>On Hold</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Paused">Paused</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
                 </select>
               </div>
 
-              {/* Remarks */}
+              {/* Remarks (Optional) - Removed 'required' */}
               <div className="md:col-span-2 group">
                 <label className="block text-sm font-semibold text-black mb-2">
-                  💬 Remarks
+                  💬 Remarks (Optional)
                 </label>
                 <input
                   type="text"
@@ -248,13 +235,11 @@ const EmployeesPage: React.FC = () => {
                 type="submit"
                 className="w-full bg-white text-black font-bold py-4 px-6 rounded-xl hover:bg-gray-100 transform hover:scale-[1.02] transition-all duration-200 shadow-lg hover:shadow-xl"
               >
-                Submit Task 
+                Submit Task
               </button>
             </div>
           </form>
         </div>
-
-      
       </div>
     </div>
   );

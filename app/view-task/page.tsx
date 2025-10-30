@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays, Menu, X } from "lucide-react";
+import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays } from "lucide-react";
 
 // --- INTERFACES ---
 interface Subtask {
@@ -16,28 +16,34 @@ interface Subtask {
   timeSpent?: string;
 }
 
+// ✅ UPDATED Task interface to remove 'name', 'plan', and 'done'
 interface Task {
   _id: string;
-  date: string;
+  // ❌ Removed 'date' (though still used in filter)
   empId: string;
-  project: string;
-  name: string;
-  plan: string;
-  done: string;
-  completion: string;
-  status: string;
+  project?: string; // Made optional as per model
+  // ❌ Removed 'name'
+  // ❌ Removed 'plan'
+  // ❌ Removed 'done'
+  completion?: string; // Made optional
+  status?: string;     // Made optional
   remarks?: string;
   subtasks?: Subtask[];
+
   startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
+
+  // Keeping 'date' for filtering/display legacy tasks, even if model dropped it
+  date?: string; 
 }
 
 // -----------------------------------------------------------
 
 const ViewTaskPage: React.FC = () => {
-  const [searchCriteria, setSearchCriteria] = useState<"empId" | "name" | "project" | "">(""); 
+  // 📌 Removed 'name' from search criteria as it was removed from the model
+  const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
   const [searchValue, setSearchValue] = useState(""); 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -45,7 +51,7 @@ const ViewTaskPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState("today");
   const [selectedDate, setSelectedDate] = useState<string>("");
 
-  const parseDate = (dateStr: string) => new Date(dateStr);
+  const parseDate = (dateStr?: string) => new Date(dateStr || new Date()); // Handle potentially undefined date
 
   const isFetchEnabled = useMemo(() => {
     return searchCriteria.trim() !== "" && searchValue.trim() !== "";
@@ -55,10 +61,8 @@ const ViewTaskPage: React.FC = () => {
     switch (searchCriteria) {
       case 'empId':
         return 'Enter Emp ID';
-      case 'name':
-        return 'Enter Emp Name';
       case 'project':
-        return 'Enter Proj Name';
+        return 'Enter Project Name';
       default:
         return 'Select a search field first';
     }
@@ -72,7 +76,11 @@ const ViewTaskPage: React.FC = () => {
         d1.getDate() === d2.getDate();
 
     return tasks.filter((task) => {
-      const taskDate = parseDate(task.date);
+      // Use 'startDate' for filtering if 'date' is unavailable, or skip if no date is present
+      const dateToFilter = task.date || task.startDate;
+      if (!dateToFilter) return timeRange === "all";
+
+      const taskDate = parseDate(dateToFilter);
 
       if (selectedDate) {
         const selDate = parseDate(selectedDate);
@@ -116,6 +124,8 @@ const ViewTaskPage: React.FC = () => {
       const params = new URLSearchParams();
       params.append(searchCriteria, searchValue);
 
+      // ⚠️ Note: If you were searching by 'name' previously, you might need a new API endpoint.
+      // Assuming existing /getByEmpId or similar now handles all search criteria via query params.
       const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
       const data = await res.json();
 
@@ -148,14 +158,15 @@ const ViewTaskPage: React.FC = () => {
     const worksheetData = tasksToDownload.flatMap((t) => {
       const taskRow = {
         Type: "Task",
-        Date: t.date,
+        // Keeping 'Date' for legacy/filtering purposes
+        Date: t.date ? t.date.split("T")[0] : "",
         "Employee ID": t.empId,
-        Project: t.project,
-        Name: t.name,
-        Plan: t.plan,
-        Done: t.done,
-        "Completion %": t.completion,
-        Status: t.status,
+        Project: t.project || "",
+        // ❌ Removed 'Name' column (it was t.name)
+        // ❌ Removed 'Plan' column (it was t.plan)
+        // ❌ Removed 'Done' column (it was t.done)
+        "Completion %": t.completion || "0",
+        Status: t.status || "N/A",
         Remarks: t.remarks || "",
         "Start Date": t.startDate ? t.startDate.split("T")[0] : "",
         "Due Date": t.dueDate ? t.dueDate.split("T")[0] : "",
@@ -165,12 +176,12 @@ const ViewTaskPage: React.FC = () => {
 
       const subtaskRows = (t.subtasks || []).map((st) => ({
         Type: "Subtask",
-        Date: t.date,
+        Date: t.date ? t.date.split("T")[0] : "",
         "Employee ID": t.empId,
-        Project: t.project,
-        Name: st.title,
-        Plan: "",
-        Done: "",
+        Project: t.project || "",
+        "Subtask Name": st.title, // Use 'Subtask Name' for subtask title
+        // ❌ Removed 'Plan'
+        // ❌ Removed 'Done'
         "Completion %": st.completion,
         Status: st.status,
         Remarks: st.remarks || "",
@@ -227,7 +238,6 @@ const ViewTaskPage: React.FC = () => {
             </h2>
           </div>
 
-          {/* Filter content is always visible */}
           <div className={`space-y-4`}> 
             {/* Search Criteria and Input */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -239,14 +249,13 @@ const ViewTaskPage: React.FC = () => {
                 <select
                   value={searchCriteria}
                   onChange={(e) => {
-                    setSearchCriteria(e.target.value as "empId" | "name" | "project" | "");
+                    setSearchCriteria(e.target.value as "empId" | "project" | "");
                     setSearchValue("");
                   }}
                   className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-black text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white shadow-sm"
                 >
                   <option value="" disabled>Select Field</option>
                   <option value="empId">Employee ID</option>
-                  <option value="name">Employee Name</option>
                   <option value="project">Project Name</option>
                 </select>
               </div>
@@ -308,7 +317,7 @@ const ViewTaskPage: React.FC = () => {
                 disabled={!isFetchEnabled}
                 className={`w-full font-bold px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-all transform hover:scale-105 text-sm sm:text-base shadow-lg ${
                   isFetchEnabled
-                    ? "bg-green-600 text-white hover:bg-green-700" // ⬅️ GREEN BUTTON STYLE APPLIED HERE
+                    ? "bg-green-600 text-white hover:bg-green-700"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
                 }`}
               >
@@ -355,9 +364,9 @@ const ViewTaskPage: React.FC = () => {
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Date</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Employee ID</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Project</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Name</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Plan</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Done</th>
+                      {/* ❌ Removed 'Name' */}
+                      {/* ❌ Removed 'Plan' */}
+                      {/* ❌ Removed 'Done' */}
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">%</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Status</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Remarks</th>
@@ -365,7 +374,7 @@ const ViewTaskPage: React.FC = () => {
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
                       <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><Clock className="inline w-3 h-3 mr-1"/>Time</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Expand</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Subtasks</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -375,14 +384,14 @@ const ViewTaskPage: React.FC = () => {
                           <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
                           <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
                           <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
-                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.project}</td>
-                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.name}</td>
-                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.plan}</td>
-                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.done}</td>
-                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">{task.completion}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                          {/* ❌ Removed 'Name' cell (was task.name) */}
+                          {/* ❌ Removed 'Plan' cell (was task.plan) */}
+                          {/* ❌ Removed 'Done' cell (was task.done) */}
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">{task.completion || "0"}</td>
                           <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm">
                             <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-green-800" : task.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
-                              {task.status}
+                              {task.status || "N/A"}
                             </span>
                           </td>
                           <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.remarks || "-"}</td>
@@ -404,10 +413,8 @@ const ViewTaskPage: React.FC = () => {
                             <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-gray-700 pl-8 xl:pl-12">Subtask</td>
                             <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
                             <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
-                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project}</td>
-                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black font-semibold">{subtask.title}</td>
-                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-gray-500">-</td>
-                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-gray-500">-</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black font-semibold" colSpan={3}>{subtask.title}</td> 
                             <td className="px-4 xl:px-6 py-2 xl:py-3 text-center text-xs xl:text-sm font-bold text-black">{subtask.completion}</td>
                             <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm">
                               <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-green-800" : subtask.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
@@ -437,11 +444,12 @@ const ViewTaskPage: React.FC = () => {
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="inline-block px-2 sm:px-3 py-1 bg-black text-white text-xs font-bold rounded-full mb-2">TASK</span>
-                        <h3 className="font-bold text-black text-sm sm:text-base">{task.name}</h3>
-                        <p className="text-xs sm:text-sm text-gray-700 mt-1">{task.project}</p>
+                        {/* ⚠️ Name is removed. Displaying project name as the primary title */}
+                        <h3 className="font-bold text-black text-sm sm:text-base">Project: {task.project || "N/A"}</h3>
+                        <p className="text-xs sm:text-sm text-gray-700 mt-1">Emp ID: {task.empId}</p>
                       </div>
                       <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-green-800" : task.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
-                        {task.status}
+                        {task.status || "N/A"}
                       </span>
                     </div>
                   </div>
@@ -449,10 +457,8 @@ const ViewTaskPage: React.FC = () => {
                   <div className="p-3 sm:p-4 space-y-2 text-xs sm:text-sm text-black">
                     <div className="grid grid-cols-2 gap-2">
                       <div><span className="font-semibold text-gray-800">Date:</span> {formatDate(task.date)}</div>
-                      <div><span className="font-semibold text-gray-800">Emp ID:</span> {task.empId}</div>
-                      <div><span className="font-semibold text-gray-800">Plan:</span> {task.plan}</div>
-                      <div><span className="font-semibold text-gray-800">Done:</span> {task.done}</div>
-                      <div><span className="font-semibold text-gray-800">Completion:</span> <span className="font-bold text-black">{task.completion}%</span></div>
+                      {/* ❌ Removed Plan and Done rows */}
+                      <div><span className="font-semibold text-gray-800">Completion:</span> <span className="font-bold text-black">{task.completion || "0"}%</span></div>
                       <div><span className="font-semibold text-gray-800">Time Spent:</span> {task.timeSpent || "-"}</div>
                     </div>
                     

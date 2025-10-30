@@ -1,3 +1,4 @@
+// /api/tasks/add
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Task from "@/models/Task";
@@ -8,24 +9,35 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Destructure and validate required fields
-    const { date, empId, project, name, plan, done, completion, status, remarks } = body;
+    // Destructure the fields to match the frontend's formData.
+    // NOTE: 'name' is removed from destructuring.
+    const {
+      startDate,
+      endDate,
+      dueDate,
+      empId, // REQUIRED field based on the latest frontend
+      project,
+      completion,
+      status,
+      remarks,
+    } = body; 
 
-    if (!empId || !date || !project || !name || !plan || !done || !completion || !status) {
+    // ✅ Validate REQUIRED field: empId is the ONLY mandatory field now.
+    if (!empId) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required field: empId" },
         { status: 400 }
       );
     }
 
-    // Create new task
+    // Create new task with the updated fields
     const newTask = new Task({
       empId,
-      date,
+      startDate, 
+      endDate,   
+      dueDate,   
       project,
-      name,
-      plan,
-      done,
+      // ❌ Removed 'name' field
       completion,
       status,
       remarks,

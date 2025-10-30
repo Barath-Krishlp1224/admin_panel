@@ -1,38 +1,19 @@
+// models/Task.ts
+
 import mongoose, { Schema, model, models, Document } from "mongoose";
 
+// ... ISubtask interface and SubtaskSchema remain the same ...
 export interface ISubtask {
   title: string;
   status: "Pending" | "In Progress" | "Completed";
   completion: number;
   remarks?: string;
-  // 🆕 NEW SUBTASK FIELDS
   startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
 }
 
-export interface ITask extends Document {
-  date: string;
-  empId: string;
-  project: string;
-  name: string;
-  plan: string;
-  done: string;
-  completion: number;
-  status: string;
-  remarks?: string;
-  subtasks?: ISubtask[];
-  createdAt?: Date;
-  updatedAt?: Date;
-  // TASK FIELDS (already present)
-  startDate?: string;
-  dueDate?: string;
-  endDate?: string;
-  timeSpent?: string;
-}
-
-// ✅ Subtask schema (UPDATED)
 const SubtaskSchema = new Schema<ISubtask>({
   title: { type: String, required: true },
   status: {
@@ -42,29 +23,49 @@ const SubtaskSchema = new Schema<ISubtask>({
   },
   completion: { type: Number, default: 0 },
   remarks: { type: String, default: "" },
-  // 🆕 NEW SCHEMA FIELDS FOR SUBTASK
   startDate: { type: String },
   dueDate: { type: String },
   endDate: { type: String },
   timeSpent: { type: String },
 });
+// ... end of ISubtask and SubtaskSchema ...
 
-// ✅ Main Task schema (Unchanged, as task fields were added previously)
+export interface ITask extends Document {
+  empId: string; // The only required field
+  project?: string;
+  // ❌ Removed 'name'
+  completion?: number;
+  status?: string;
+  remarks?: string;
+  subtasks?: ISubtask[];
+  createdAt?: Date;
+  updatedAt?: Date;
+
+  startDate?: string; // Made optional
+  dueDate?: string;
+  endDate?: string;
+  timeSpent?: string;
+}
+
+// ✅ Main Task schema (UPDATED)
 const TaskSchema = new Schema<ITask>(
   {
-    date: { type: String, required: true },
-    empId: { type: String, required: true },
-    project: { type: String, required: true },
-    name: { type: String, required: true },
-    plan: { type: String, required: true },
-    done: { type: String, required: true },
-    completion: { type: Number, required: true },
-    status: { type: String, required: true },
-    remarks: { type: String },
-    subtasks: [SubtaskSchema],
-    startDate: { type: String },
+    // ✅ ONLY empId is required
+    empId: { type: String, required: true }, 
+
+    // ✅ ALL OTHER FIELDS ARE NOW OPTIONAL (no 'required: true')
+    project: { type: String },
+    // ❌ REMOVED 'name' field
+    
+    startDate: { type: String }, 
     dueDate: { type: String },
     endDate: { type: String },
+
+    completion: { type: Number },
+    status: { type: String, default: "In Progress" }, // Keeping default for status
+    remarks: { type: String },
+    
+    subtasks: [SubtaskSchema],
     timeSpent: { type: String },
   },
   { timestamps: true }

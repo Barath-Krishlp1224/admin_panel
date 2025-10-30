@@ -24,14 +24,14 @@ const EmployeesPage: React.FC = () => {
           onClick={() => router.push("/team-lead/create-task")}
           className="bg-black text-white px-8 py-4 rounded-xl font-semibold hover:bg-gray-800 transform hover:scale-105 transition-all duration-200 shadow-lg"
         >
-          ➕ Create Task
+          Create Task
         </button>
 
         <button
           onClick={() => router.push("/view-task")}
           className="bg-white border-2 border-black text-black px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transform hover:scale-105 transition-all duration-200 shadow-lg"
         >
-          📋 View / Update Task
+          View Task
         </button>
       </div>
     </div>

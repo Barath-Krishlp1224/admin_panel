@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Role = "Admin" | "Manager" | "Employee" | "";
+// UPDATED: Added "TeamLead" to the Role type
+type Role = "Admin" | "Manager" | "TeamLead" | "Employee" | "";
 
 export default function LoginSignupPage() {
   const [isSignup, setIsSignup] = useState(false);
@@ -55,6 +56,7 @@ export default function LoginSignupPage() {
           role: role, 
         };
       } else {
+        // NOTE: This payload assumes your backend can handle either empId or email
         payload = { 
           empIdOrEmail: form.empId, 
           password: form.password 
@@ -77,18 +79,39 @@ export default function LoginSignupPage() {
       alert(data.message);
 
       if (!isSignup) {
-        // Successful Login Logic
-        if (data.user && data.user.role) { 
-            // Save the user's role to local storage
-            localStorage.setItem("userRole", data.user.role);
+        // 🔑 Successful Login Logic to save empId and handle routing
+        if (data.user && data.user.role && data.user.empId) { 
+            const userRole = data.user.role as Role;
+            
+            // Save user data to local storage
+            localStorage.setItem("userRole", userRole);
+            localStorage.setItem("userEmpId", data.user.empId);
+            
+            if(data.user.name) {
+                localStorage.setItem("userName", data.user.name); 
+            }
+            
+            // 🎯 CONDITIONAL ROUTING LOGIC FINALIZED
+            if (userRole === "Admin") {
+                router.push("/admin"); 
+            } else if (userRole === "Manager") {
+                router.push("/manager"); 
+            } else if (userRole === "TeamLead") {
+                router.push("/team-lead"); 
+            } else if (userRole === "Employee") {
+                // Redirect Employee directly to the task page
+                router.push("/employees"); 
+            } else {
+                // Fallback for any unknown role (could also be changed to "/")
+                router.push("/home");  
+            }
+
         } else {
-             // This branch indicates a backend data issue (missing role)
-             setError("Login successful but user role data is missing."); 
+             // This branch indicates a backend data issue (missing role/empId)
+             setError("Login successful but required user data is missing (Role or Employee ID)."); 
              return;
         }
         
-        // Redirect to home page
-        router.push("/home");
         return; 
 
       } else {
@@ -167,7 +190,8 @@ export default function LoginSignupPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">Employee ID</label>
                 <input
                     type="text"
-                    placeholder="EMP12345 or Email"
+                    // NOTE: Placeholder updated to suggest EmpId/Email is expected
+                    placeholder="EMP12345 or Email" 
                     value={form.empId}
                     onChange={(e) => setForm({ ...form, empId: e.target.value })}
                     className="w-full px-4 py-3.5 text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none transition-all placeholder:text-slate-400"
@@ -201,6 +225,8 @@ export default function LoginSignupPage() {
                   <option value="" disabled>Choose your role...</option>
                   <option value="Admin">Admin</option>
                   <option value="Manager">Manager</option>
+                  {/* ADDED: New Role Option in the UI */}
+                  <option value="TeamLead">Team Lead</option>
                   <option value="Employee">Employee</option>
                 </select>
               </div>

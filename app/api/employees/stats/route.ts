@@ -33,4 +33,4 @@ export async function GET() {
     console.error("Error fetching employee stats:", error);
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
   }
-}
+} 

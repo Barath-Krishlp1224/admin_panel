@@ -1,8 +1,7 @@
-// models/Task.ts
+import mongoose, { Schema, model, models, Document, Model } from "mongoose";
 
-import mongoose, { Schema, model, models, Document } from "mongoose";
+// --- Subtask Definitions ---
 
-// ... ISubtask interface and SubtaskSchema remain the same ...
 export interface ISubtask {
   title: string;
   status: "Pending" | "In Progress" | "Completed";
@@ -21,56 +20,64 @@ const SubtaskSchema = new Schema<ISubtask>({
     enum: ["Pending", "In Progress", "Completed"],
     default: "Pending",
   },
-  completion: { type: Number, default: 0 },
+  completion: { type: Number, default: 0, min: 0, max: 100 }, // Added min/max constraint
   remarks: { type: String, default: "" },
   startDate: { type: String },
   dueDate: { type: String },
   endDate: { type: String },
   timeSpent: { type: String },
-});
-// ... end of ISubtask and SubtaskSchema ...
+}, { _id: true }); // Ensure subtasks have their own IDs
+
+// --- Task Document Definition ---
 
 export interface ITask extends Document {
   empId: string; // The only required field
   project?: string;
-  // ❌ Removed 'name'
   completion?: number;
-  status?: string;
+  status?: "Pending" | "In Progress" | "Completed" | string; // Use enum or allow string
   remarks?: string;
   subtasks?: ISubtask[];
-  createdAt?: Date;
-  updatedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 
-  startDate?: string; // Made optional
+  startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
 }
 
-// ✅ Main Task schema (UPDATED)
+// --- Main Task Schema ---
 const TaskSchema = new Schema<ITask>(
   {
     // ✅ ONLY empId is required
-    empId: { type: String, required: true }, 
+    empId: { type: String, required: true, index: true }, 
 
-    // ✅ ALL OTHER FIELDS ARE NOW OPTIONAL (no 'required: true')
+    // ✅ ALL OTHER FIELDS ARE NOW OPTIONAL
     project: { type: String },
-    // ❌ REMOVED 'name' field
     
     startDate: { type: String }, 
     dueDate: { type: String },
     endDate: { type: String },
 
-    completion: { type: Number },
-    status: { type: String, default: "In Progress" }, // Keeping default for status
+    completion: { type: Number, min: 0, max: 100 },
+    // Use the enum here for better type enforcement, matching the Subtask status
+    status: { 
+        type: String, 
+        enum: ["Pending", "In Progress", "Completed"], 
+        default: "Pending" 
+    }, 
     remarks: { type: String },
     
     subtasks: [SubtaskSchema],
     timeSpent: { type: String },
   },
-  { timestamps: true }
+  { 
+    timestamps: true, // Ensures 'createdAt' and 'updatedAt' fields are automatically managed
+    collection: 'employeetasks' // Explicitly setting a collection name
+  }
 );
 
-const Task = models.EmployeeTask || model<ITask>("EmployeeTask", TaskSchema);
+// Check if model already exists before defining it (Standard Next.js practice)
+const Task: Model<ITask> = models.EmployeeTask || model<ITask>("EmployeeTask", TaskSchema);
 
 export default Task;

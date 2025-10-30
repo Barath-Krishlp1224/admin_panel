@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
 
-    const requiredFields = ["project", "plan", "done", "completion", "status"];
+    const requiredFields = ["project", "completion", "status"];
     for (const field of requiredFields) {
       if (body[field] === undefined || body[field] === "") {
         return NextResponse.json(
@@ -30,8 +30,8 @@ export async function PUT(req: NextRequest) {
 
     const updateData: any = {
       project: body.project,
-      plan: body.plan,
-      done: body.done,
+      plan: body.plan ?? "",
+      done: body.done ?? "",
       completion: Number(body.completion),
       status: body.status,
       remarks: body.remarks ?? "",

@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Search, Edit2, Save, X, CheckCircle, Plus, ChevronDown, ChevronRight, CalendarDays, Clock, Filter } from "lucide-react"; 
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import * as XLSX from "xlsx";
+// ⭐ CHANGE 1: Imported Plus icon
+import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays, Edit2, Save, X, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
+// --- INTERFACES ---
 interface Subtask {
   title: string;
   status: string;
@@ -16,849 +20,968 @@ interface Subtask {
 
 interface Task {
   _id: string;
-  date: string;
   empId: string;
-  project: string;
-  name: string;
-  plan: string;
-  done: string;
-  completion: string;
-  status: string;
+  project?: string;
+  plan?: string;
+  done?: string;
+  completion?: string;
+  status?: string;
   remarks?: string;
   subtasks?: Subtask[];
   startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
+  date?: string; 
 }
 
-// 1. UPDATED: Add new presets to the type
-type DateFilterPreset = 
-    | "All" 
-    | "Today" 
-    | "Yesterday" 
-    | "Last 7 Days" 
-    | "Last 1 Month" 
-    | "Last 3 Months" // NEW
-    | "Last 6 Months" // NEW
-    | "Last 9 Months" // NEW
-    | "Last 1 Year" 
-    | "Specific Date";
-
-interface DateFilter {
-    preset: DateFilterPreset;
-    startDate: string;
-    endDate: string;
-}
-
-interface ToastProps {
-  message: string;
-  onClose: () => void;
-}
-
-const Toast: React.FC<ToastProps> = ({ message, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed bottom-5 right-5 z-50 p-4 bg-green-600 text-white rounded-lg shadow-xl flex items-center gap-3 transition-transform duration-300 transform animate-toast-in"
-      style={{ animation: "toast-in 0.3s forwards" }}
-    >
-      <CheckCircle className="w-5 h-5" />
-      <span className="font-medium">{message}</span>
-      <button
-        onClick={onClose}
-        className="ml-4 p-1 rounded-full hover:bg-green-700 transition"
-      >
-        <X className="w-4 h-4" />
-      </button>
-      <style jsx global>{`
-        @keyframes toast-in {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-      `}</style>
-    </div>
-  );
-};
-
-// 2. UPDATED: Implement logic for new presets
-const getDatesForFilter = (preset: DateFilterPreset, customDate: string): { start: string, end: string } => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const formatDate = (date: Date): string => date.toISOString().split('T')[0];
-    
-    // Helper to get a date 'months' ago
-    const getDateMonthsAgo = (months: number): Date => {
-        const date = new Date(today);
-        date.setMonth(today.getMonth() - months);
-        // Correct for months with fewer days (e.g., if today is Jan 31, date.setMonth(today.getMonth() - 1) gives March 3)
-        if (date.getDate() < today.getDate()) {
-            date.setDate(1); // Set to 1st to then use setDate to get the correct date
-            date.setMonth(today.getMonth() - months);
-        }
-        return date;
-    }
-
-    switch (preset) {
-        case "Today":
-            return { start: formatDate(today), end: formatDate(today) };
-        case "Yesterday":
-            const yesterday = new Date(today);
-            yesterday.setDate(today.getDate() - 1);
-            return { start: formatDate(yesterday), end: formatDate(yesterday) };
-        case "Last 7 Days":
-            const last7Days = new Date(today);
-            last7Days.setDate(today.getDate() - 6);
-            return { start: formatDate(last7Days), end: formatDate(today) };
-        case "Last 1 Month":
-            const last1Month = getDateMonthsAgo(1);
-            return { start: formatDate(last1Month), end: formatDate(today) };
-        case "Last 3 Months": // NEW LOGIC
-            const last3Months = getDateMonthsAgo(3);
-            return { start: formatDate(last3Months), end: formatDate(today) };
-        case "Last 6 Months": // NEW LOGIC
-            const last6Months = getDateMonthsAgo(6);
-            return { start: formatDate(last6Months), end: formatDate(today) };
-        case "Last 9 Months": // NEW LOGIC
-            const last9Months = getDateMonthsAgo(9);
-            return { start: formatDate(last9Months), end: formatDate(today) };
-        case "Last 1 Year":
-            const last1Year = getDateMonthsAgo(12);
-            return { start: formatDate(last1Year), end: formatDate(today) };
-        case "Specific Date":
-            const specificDate = customDate || formatDate(today);
-            return { start: specificDate, end: specificDate };
-        case "All":
-        default:
-            return { start: "", end: "" };
-    }
-};
-
-const isTaskInDateRange = (taskDate: string, startDate: string, endDate: string): boolean => {
-    const taskDateOnly = taskDate.split('T')[0];
-    
-    const taskTime = new Date(taskDateOnly).getTime();
-    
-    const end = new Date(endDate);
-    end.setDate(end.getDate() + 1); 
-    const endTime = end.getTime();
-
-    const startTime = new Date(startDate).getTime();
-
-    return taskTime >= startTime && taskTime < endTime;
-};
-
+// -----------------------------------------------------------
 
 const ViewTaskPage: React.FC = () => {
-  const [empId, setEmpId] = useState("");
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const router = useRouter();
+  const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
+  const [searchValue, setSearchValue] = useState(""); 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [successToast, setSuccessToast] = useState("");
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [message, setMessage] = useState("Loading your tasks automatically...");
+  const [timeRange, setTimeRange] = useState("all");
+  const [selectedDate, setSelectedDate] = useState<string>("");
   
-  const [dateFilter, setDateFilter] = useState<DateFilter>({
-      preset: "Last 7 Days",
-      startDate: getDatesForFilter("Last 7 Days", "").start,
-      endDate: getDatesForFilter("Last 7 Days", "").end,
-  });
+  // Edit state
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<Task | null>(null);
 
+  const parseDate = (dateStr?: string) => new Date(dateStr || new Date());
 
-  const filterTasks = useCallback((taskList: Task[], currentFilter: DateFilter) => {
-    if (currentFilter.preset === "All") {
-        return taskList;
-    }
+  // Memoized list of tasks sorted by date (most recent first)
+  const sortedTasks = useMemo(() => {
+    const tasksCopy = [...tasks];
     
-    const { start, end } = getDatesForFilter(currentFilter.preset, currentFilter.startDate);
+    return tasksCopy.sort((a, b) => {
+      const dateA = parseDate(a.date || a.startDate);
+      const dateB = parseDate(b.date || b.startDate);
 
-    if (!start || !end) {
-        return taskList;
-    }
-
-    return taskList.filter(task => 
-        isTaskInDateRange(task.date, start, end)
-    );
-  }, []);
-
-  useEffect(() => {
-      setTasks(filterTasks(allTasks, dateFilter));
-  }, [allTasks, dateFilter, filterTasks]);
-
-
-  const toggleSubtasks = (taskId: string) => {
-    setExpandedTasks((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(taskId)) {
-        newSet.delete(taskId);
-      } else {
-        newSet.add(taskId);
-      }
-      return newSet;
+      return dateB.getTime() - dateA.getTime();
     });
-  };
+  }, [tasks]); 
 
-  const handleDateFilterChange = (
-    e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>
-  ) => {
-    const { name, value } = e.target;
-    
-    if (name === "preset") {
-        const newPreset = value as DateFilterPreset;
-        const { start, end } = getDatesForFilter(newPreset, dateFilter.startDate);
-        
-        setDateFilter({
-            preset: newPreset,
-            startDate: newPreset === "Specific Date" ? dateFilter.startDate : start,
-            endDate: newPreset === "Specific Date" ? dateFilter.endDate : end,
-        });
+  const isFetchEnabled = useMemo(() => {
+    return searchCriteria.trim() !== "" && searchValue.trim() !== "";
+  }, [searchCriteria, searchValue]);
 
-    } else if (name === "startDate" || name === "endDate") {
-        if (dateFilter.preset === "Specific Date") {
-             setDateFilter(prev => ({ 
-                ...prev, 
-                [name]: value,
-                endDate: name === "startDate" && value > prev.endDate ? value : prev.endDate
-            }));
-        }
+  const getPlaceholderText = () => {
+    switch (searchCriteria) {
+      case 'empId':
+        return 'Enter Emp ID';
+      case 'project':
+        return 'Enter Project Name';
+      default:
+        return 'Select a search field first';
     }
   };
+  
+  const filterTasksByDate = useCallback((tasks: Task[]) => {
+    const now = new Date();
+    const isSameDay = (d1: Date, d2: Date) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
 
+    return tasks.filter((task) => {
+      const dateToFilter = task.date || task.startDate;
+      if (!dateToFilter) return timeRange === "all";
 
-  const handleFetch = async () => {
-    if (!empId) {
-      setMessage("Please enter Employee ID");
-      setAllTasks([]);
+      const taskDate = parseDate(dateToFilter);
+
+      if (selectedDate) {
+        const selDate = parseDate(selectedDate);
+        return isSameDay(taskDate, selDate);
+      }
+
+      switch (timeRange) {
+        case "today":
+          return isSameDay(taskDate, now);
+        case "yesterday":
+          const yesterday = new Date(now);
+          yesterday.setDate(now.getDate() - 1);
+          return isSameDay(taskDate, yesterday);
+        case "week":
+          const weekAgo = new Date(now);
+          weekAgo.setDate(now.getDate() - 7);
+          return taskDate >= weekAgo && taskDate <= now;
+        case "month":
+          const monthAgo = new Date(now);
+          monthAgo.setMonth(now.getMonth() - 1);
+          return taskDate >= monthAgo && taskDate <= now;
+        case "year":
+          const yearAgo = new Date(now);
+          yearAgo.setFullYear(now.getFullYear() - 1);
+          return taskDate >= yearAgo && taskDate <= now;
+        case "all":
+        default:
+          return true;
+      }
+    });
+  }, [selectedDate, timeRange]);
+
+  const handleFetch = useCallback(async () => {
+    if (!searchCriteria || !searchValue) {
+      setMessage("Please select a criteria and enter a search value.");
       setTasks([]);
       return;
     }
 
-    setLoading(true);
-    setMessage("");
-
+    setMessage(`Fetching tasks for ${searchCriteria}: ${searchValue}...`);
+    
     try {
-      // NOTE: You'll need to replace this with your actual API endpoint
-      const res = await fetch(`/api/tasks/getByEmpId?empId=${empId}`);
+      const params = new URLSearchParams();
+      params.append(searchCriteria, searchValue);
+
+      const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
       const data = await res.json();
 
       if (res.ok) {
-        const fetchedTasks = data.tasks || [];
-        setAllTasks(fetchedTasks);
-        setMessage(fetchedTasks.length === 0 ? "No tasks found for this employee." : "");
+        const tasksArray = Array.isArray(data.tasks) ? data.tasks : [];
+        const filtered = filterTasksByDate(tasksArray);
+        setTasks(filtered);
+        setMessage(filtered.length === 0 ? "No tasks found for selected criteria and range" : "");
       } else {
-        setAllTasks([]);
         setTasks([]);
         setMessage(data.error || "Failed to fetch tasks");
       }
     } catch (error) {
       console.error(error);
-      setMessage("Server error");
-    } finally {
-      setLoading(false);
+      setTasks([]);
+      setMessage("Server error. Check API connection.");
+    }
+  }, [searchCriteria, searchValue, filterTasksByDate]);
+
+  useEffect(() => {
+    const storedEmpId = localStorage.getItem("userEmpId");
+    const storedRole = localStorage.getItem("userRole");
+
+    if (storedEmpId) {
+        setSearchCriteria("empId");
+        setSearchValue(storedEmpId);
+    } else {
+        router.push('/');
+    }
+  }, [router]);
+  
+  useEffect(() => {
+      if (searchCriteria === 'empId' && searchValue) {
+          handleFetch();
+      }
+  }, [searchCriteria, searchValue, handleFetch]);
+
+  // Edit handlers
+  const startEditing = (task: Task) => {
+    setEditingTaskId(task._id);
+    setEditFormData({ ...task });
+  };
+
+  const cancelEditing = () => {
+    setEditingTaskId(null);
+    setEditFormData(null);
+  };
+  
+  // ⭐ NEW: Function to add a new subtask
+  const addSubtask = () => {
+    if (editFormData) {
+      const newSubtask: Subtask = {
+        title: "New Subtask",
+        status: "Pending",
+        completion: 0,
+        remarks: "",
+        startDate: new Date().toISOString().split('T')[0], // Set current date as default
+        dueDate: "",
+        endDate: "",
+        timeSpent: "",
+      };
+      setEditFormData({
+        ...editFormData,
+        // Ensure subtasks is treated as an array
+        subtasks: [...(editFormData.subtasks || []), newSubtask], 
+      });
     }
   };
 
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-  };
 
-  const handleEditChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setEditingTask((prev) => (prev ? { ...prev, [name]: value } : null));
-  };
-
-  const handleAddSubtask = () => {
-    if (!editingTask) return;
-    const updatedSubtasks = [
-      ...(editingTask.subtasks || []),
-      { title: "", status: "Pending", completion: 0, remarks: "", startDate: "", dueDate: "", endDate: "", timeSpent: "" },
-    ];
-    setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
-  };
-
-  const handleSubtaskChange = (index: number, field: string, value: string | number) => {
-    if (!editingTask || !editingTask.subtasks) return;
-    const updatedSubtasks = [...editingTask.subtasks];
-    updatedSubtasks[index] = { ...updatedSubtasks[index], [field]: value };
-    setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
-  };
-
-  const handleDeleteSubtask = (index: number) => {
-    if (!editingTask || !editingTask.subtasks) return;
-    const updatedSubtasks = editingTask.subtasks.filter((_, i) => i !== index);
-    setEditingTask({ ...editingTask, subtasks: updatedSubtasks });
-  };
-
-  const handleSave = async () => {
-    if (!editingTask) return;
-    setLoading(true);
-    setMessage("");
-    setSuccessToast("");
-
-    if (!editingTask.project || !editingTask.plan || !editingTask.done) {
-      setMessage("Project, Plan, and Done fields cannot be empty.");
-      setLoading(false);
-      return;
+  const handleEditChange = (field: keyof Task, value: any) => {
+    if (editFormData) {
+      setEditFormData({ ...editFormData, [field]: value });
     }
+  };
+
+  const handleSubtaskChange = (index: number, field: keyof Subtask, value: any) => {
+    if (editFormData && editFormData.subtasks) {
+      const updatedSubtasks = [...editFormData.subtasks];
+      updatedSubtasks[index] = { ...updatedSubtasks[index], [field]: value };
+      setEditFormData({ ...editFormData, subtasks: updatedSubtasks });
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editFormData) return;
 
     try {
-      // NOTE: You'll need to replace this with your actual API endpoint
-      const res = await fetch(`/api/tasks/update/${editingTask._id}`, {
+      const res = await fetch(`/api/tasks/${editFormData._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingTask),
+        body: JSON.stringify({
+          project: editFormData.project,
+          plan: editFormData.plan || "",
+          done: editFormData.done || "",
+          completion: editFormData.completion,
+          status: editFormData.status,
+          remarks: editFormData.remarks,
+          startDate: editFormData.startDate,
+          dueDate: editFormData.dueDate,
+          endDate: editFormData.endDate,
+          timeSpent: editFormData.timeSpent,
+          subtasks: editFormData.subtasks || []
+        })
       });
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
-        setEditingTask(null);
-        setSuccessToast("Task updated successfully! Refreshing data...");
-        
-        // Refetch all tasks to update the list
-        await handleFetch(); 
-
+      if (res.ok) {
+        setMessage("Task updated successfully!");
+        setEditingTaskId(null);
+        setEditFormData(null);
+        handleFetch(); // Refresh the task list
       } else {
-        setMessage(data.message || "Failed to update task.");
+        setMessage(data.message || "Failed to update task");
       }
     } catch (error) {
       console.error(error);
-      setMessage("Server error during update.");
-    } finally {
-      if (!successToast) {
-         setLoading(false);
-      }
+      setMessage("Error updating task");
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingTask(null);
-    setMessage("");
+  const toggleExpand = (taskId: string) => {
+    setExpanded(expanded === taskId ? null : taskId);
   };
 
-  const RenderTaskRow = (task: Task, idx: number) => {
-    const isExpanded = expandedTasks.has(task._id);
-    const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+  const downloadTasks = (tasksToDownload: Task[], filename: string) => {
+    if (tasksToDownload.length === 0) {
+      alert("No tasks available to download");
+      return;
+    }
 
-    const mainColSpan = 16; 
+    const worksheetData = tasksToDownload.flatMap((t) => {
+      const taskRow = {
+        Type: "Task",
+        Date: t.date ? t.date.split("T")[0] : "",
+        "Employee ID": t.empId,
+        Project: t.project || "",
+        "Completion %": t.completion || "0",
+        Status: t.status || "N/A",
+        Remarks: t.remarks || "",
+        "Start Date": t.startDate ? t.startDate.split("T")[0] : "",
+        "Due Date": t.dueDate ? t.dueDate.split("T")[0] : "",
+        "End Date": t.endDate ? t.endDate.split("T")[0] : "",
+        "Time Spent": t.timeSpent || "",
+      };
 
-    const subtaskHeaderColSpan = 9; 
-    
-    return (
-      <React.Fragment key={task._id}>
-        <tr
-          className={`border-b border-gray-200 hover:bg-gray-50 transition ${
-            idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-          }`}
-        >
-          <td className="px-6 py-4">
-            {hasSubtasks && (
-              <button
-                onClick={() => toggleSubtasks(task._id)}
-                className="text-gray-600 hover:text-gray-900 transition p-1"
-                title={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
-              >
-                {isExpanded ? (
-                  <ChevronDown className="w-5 h-5" />
-                ) : (
-                  <ChevronRight className="w-5 h-5" />
-                )}
-              </button>
-            )}
-          </td>
-          <td className="px-6 py-4 text-sm text-gray-700">{task.date.split("T")[0]}</td>
-          <td className="px-6 py-4 text-sm text-black font-medium">{task.empId}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.project}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.name}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.plan}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.done}</td>
-          <td className="px-6 py-4 text-sm text-center text-black font-semibold">
-            {task.completion}
-          </td>
-          <td className="px-6 py-4 text-sm">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                task.status === "Completed"
-                  ? "bg-green-100 text-green-700"
-                  : task.status === "In Progress"
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-red-100 text-red-700"
-              }`}
-            >
-              {task.status}
-            </span>
-          </td>
-          <td className="px-6 py-4 text-sm text-gray-500">{task.remarks || "-"}</td>
-          
-          <td className="px-6 py-4 text-sm text-gray-600">{task.startDate ? task.startDate.split("T")[0] : "-"}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.dueDate ? task.dueDate.split("T")[0] : "-"}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.endDate ? task.endDate.split("T")[0] : "-"}</td>
-          <td className="px-6 py-4 text-sm text-gray-600">{task.timeSpent || "-"}</td>
-          
-          <td className="px-6 py-4 text-sm font-semibold text-blue-700">Task</td>
-          <td className="px-6 py-4 text-center">
-            <button
-              onClick={() => handleEdit(task)}
-              className="text-blue-600 hover:text-blue-800 transition duration-150 p-2 rounded-full hover:bg-blue-100"
-              title="Edit Task"
-              disabled={loading}
-            >
-              <Edit2 className="w-4 h-4" />
-            </button>
-          </td>
-        </tr>
+      const subtaskRows = (t.subtasks || []).map((st) => ({
+        Type: "Subtask",
+        Date: t.date ? t.date.split("T")[0] : "",
+        "Employee ID": t.empId,
+        Project: t.project || "",
+        "Subtask Name": st.title, 
+        "Completion %": st.completion,
+        Status: st.status,
+        Remarks: st.remarks || "",
+        "Start Date": st.startDate ? st.startDate.split("T")[0] : "",
+        "Due Date": st.dueDate ? st.dueDate.split("T")[0] : "",
+        "End Date": st.endDate ? st.endDate.split("T")[0] : "",
+        "Time Spent": st.timeSpent || "",
+      }));
 
-        {hasSubtasks && isExpanded && (
-          <tr className="bg-blue-50">
-            <td colSpan={mainColSpan} className="px-6 py-4"> 
-              <div className="ml-12">
-                <h4 className="font-semibold text-gray-800 mb-3 text-sm flex items-center gap-2">
-                  <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs">
-                    {task.subtasks!.length}
-                  </span>
-                  Subtasks
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full border border-gray-300 rounded-lg">
-                    <thead>
-                      <tr className="bg-gray-100 border-b border-gray-300">
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300">Title</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300">Status</th>
-                        <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700 border-r border-gray-300">Completion</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300">Remarks</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 border-r border-gray-300"><Clock className="inline w-3 h-3 mr-1"/>Time</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {task.subtasks!.map((st, i) => (
-                        <tr key={i} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-200 last:border-b-0`}>
-                          <td className="px-4 py-2 text-sm text-gray-800 border-r border-gray-300">{st.title || "(No title)"}</td>
-                          <td className="px-4 py-2 text-sm border-r border-gray-300">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                st.status === "Completed"
-                                  ? "bg-green-100 text-green-700"
-                                  : st.status === "In Progress"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-gray-100 text-gray-700"
-                              }`}
-                            >
-                              {st.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-sm text-center font-medium text-gray-800 border-r border-gray-300">{st.completion}%</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.remarks || "-"}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.startDate ? st.startDate.split("T")[0] : "-"}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.dueDate ? st.dueDate.split("T")[0] : "-"}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.endDate ? st.endDate.split("T")[0] : "-"}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-300">{st.timeSpent || "-"}</td>
-                          <td className="px-4 py-2 text-sm font-semibold text-purple-700">Subtask</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </td>
-          </tr>
-        )}
-      </React.Fragment>
-    );
+      return [taskRow, ...subtaskRows];
+    });
+
+    const ws = XLSX.utils.json_to_sheet(worksheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+    XLSX.writeFile(wb, filename);
   };
 
-  const RenderEditRow = (task: Task) => (
-    <>
-      <tr key={task._id} className="bg-blue-50 border-b border-blue-200">
-        <td className="px-3 py-3"></td>
-        <td className="px-3 py-3 text-sm text-gray-700">{task.date.split("T")[0]}</td>
-        <td className="px-3 py-3 text-sm text-gray-500">{task.empId}</td>
-        <td className="px-3 py-2">
-          <input
-            name="project"
-            value={task.project}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2 text-sm text-gray-600">{task.name}</td>
-        <td className="px-3 py-2">
-          <textarea
-            name="plan"
-            value={task.plan}
-            onChange={handleEditChange}
-            rows={1}
-            className="w-full px-2 py-1 border rounded text-sm resize-none text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <textarea
-            name="done"
-            value={task.done}
-            onChange={handleEditChange}
-            rows={1}
-            className="w-full px-2 py-1 border rounded text-sm resize-none text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            name="completion"
-            type="number"
-            min="0"
-            max="100"
-            value={task.completion}
-            onChange={handleEditChange}
-            className="w-16 px-2 py-1 border rounded text-sm text-center text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <select
-            name="status"
-            value={task.status}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm bg-white text-gray-900"
-          >
-            <option value="Completed">Completed</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Pending">Pending</option>
-          </select>
-        </td>
-        <td className="px-3 py-2">
-          <input
-            name="remarks"
-            value={task.remarks || ""}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        
-        <td className="px-3 py-2">
-          <input
-            name="startDate"
-            type="date"
-            value={task.startDate ? task.startDate.split("T")[0] : ""} 
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            name="dueDate"
-            type="date"
-            value={task.dueDate ? task.dueDate.split("T")[0] : ""}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            name="endDate"
-            type="date"
-            value={task.endDate ? task.endDate.split("T")[0] : ""}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            name="timeSpent"
-            type="text"
-            placeholder="e.g., 8h 30m"
-            value={task.timeSpent || ""}
-            onChange={handleEditChange}
-            className="w-full px-2 py-1 border rounded text-sm text-gray-900"
-          />
-        </td>
-        
-        <td className="px-3 py-3 text-sm font-semibold text-blue-700">Task</td>
-        <td className="px-6 py-4 flex flex-col gap-1 items-center justify-center h-full">
-          <button
-            onClick={handleSave}
-            className="text-green-600 hover:text-green-800 p-2 rounded-full hover:bg-green-100 transition duration-150"
-            title="Save Changes"
-            disabled={loading}
-          >
-            <Save className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleCancelEdit}
-            className="text-red-600 hover:text-red-800 p-2 rounded-full hover:bg-red-100 transition duration-150"
-            title="Cancel Edit"
-            disabled={loading}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </td>
-      </tr>
+  const downloadAllTasks = async () => {
+    try {
+      const res = await fetch("/api/tasks/all");
+      const data = await res.json();
 
-      <tr>
-        <td colSpan={16} className="px-4 py-4 bg-gray-50 border-t border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-gray-800">Subtasks</h3>
-            <button
-              onClick={handleAddSubtask}
-              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
-              disabled={loading}
-            >
-              <Plus className="w-4 h-4" /> Add Subtask
-            </button>
-          </div>
+      if (!res.ok || !data.tasks || data.tasks.length === 0) {
+        return alert("No tasks found");
+      }
 
-          {(!task.subtasks || task.subtasks.length === 0) && (
-            <p className="text-gray-500 text-sm italic">No subtasks yet.</p>
-          )}
-
-          <div className="space-y-2 mt-2">
-            {task.subtasks?.map((subtask, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 bg-white border rounded-lg px-3 py-2 text-xs" 
-              >
-                <input
-                  type="text"
-                  placeholder="Title"
-                  value={subtask.title}
-                  onChange={(e) => handleSubtaskChange(index, "title", e.target.value)}
-                  className="w-32 border border-gray-300 rounded px-2 py-1 text-gray-800"
-                />
-                <select
-                  value={subtask.status}
-                  onChange={(e) => handleSubtaskChange(index, "status", e.target.value)}
-                  className="w-24 border border-gray-300 rounded px-2 py-1"
-                >
-                  <option value="Completed">Completed</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Pending">Pending</option>
-                </select>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="%"
-                  value={subtask.completion}
-                  onChange={(e) =>
-                    handleSubtaskChange(index, "completion", Number(e.target.value))
-                  }
-                  className="w-12 border border-gray-300 rounded px-2 py-1 text-center"
-                />
-                <input
-                  type="text"
-                  placeholder="Remarks"
-                  value={subtask.remarks || ""}
-                  onChange={(e) => handleSubtaskChange(index, "remarks", e.target.value)}
-                  className="flex-1 border border-gray-300 rounded px-2 py-1 text-gray-800"
-                />
-                
-                <input
-                  type="date"
-                  placeholder="Start"
-                  value={subtask.startDate ? subtask.startDate.split("T")[0] : ""}
-                  onChange={(e) => handleSubtaskChange(index, "startDate", e.target.value)}
-                  className="w-28 border border-gray-300 rounded px-2 py-1"
-                />
-                <input
-                  type="date"
-                  placeholder="Due"
-                  value={subtask.dueDate ? subtask.dueDate.split("T")[0] : ""}
-                  onChange={(e) => handleSubtaskChange(index, "dueDate", e.target.value)}
-                  className="w-28 border border-gray-300 rounded px-2 py-1"
-                />
-                <input
-                  type="date"
-                  placeholder="End"
-                  value={subtask.endDate ? subtask.endDate.split("T")[0] : ""}
-                  onChange={(e) => handleSubtaskChange(index, "endDate", e.target.value)}
-                  className="w-28 border border-gray-300 rounded px-2 py-1"
-                />
-                <input
-                  type="text"
-                  placeholder="Time"
-                  value={subtask.timeSpent || ""}
-                  onChange={(e) => handleSubtaskChange(index, "timeSpent", e.target.value)}
-                  className="w-20 border border-gray-300 rounded px-2 py-1"
-                />
-
-                <button
-                  onClick={() => handleDeleteSubtask(index)}
-                  className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-red-100 transition"
-                  title="Delete Subtask"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </td>
-      </tr>
-    </>
-  );
+      const filtered = filterTasksByDate(data.tasks);
+      downloadTasks(filtered, "All_Employee_Tasks.xlsx");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to download all tasks");
+    }
+  };
+  
+  const formatDate = (dateString?: string) => 
+    dateString ? dateString.split("T")[0] : "-";
 
   return (
-    <div className="min-h-screen">
-      <div className="w-full">
-        <div className="max-w-7xl mx-auto mt-[15%] px-6 py-8">
-          <h1 className="text-4xl font-bold text-white mb-10">Employee Tasks</h1>
+    <div className="min-h-screen"> 
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 pt-16 sm:pt-20 md:pt-24">
+        {/* Header */}
+        <div className="mt-[10%]">
+          {/* Main heading set to black */}
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl font-extrabold text-white mb-5">
+            Employee Tasks Dashboard
+          </h1>
+        </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <div className="flex flex-col md:flex-row gap-4 md:items-end">
-              
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  <Search className="inline w-4 h-4 mr-2" /> Employee ID
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter Employee ID"
-                  value={empId}
-                  onChange={(e) => setEmpId(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
-                  onKeyDown={(e) => e.key === "Enter" && handleFetch()}
-                />
-              </div>
-
-              <div className="min-w-[200px]">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <Filter className="inline w-4 h-4 mr-2" /> Date Filter
-                </label>
-                <select
-                  name="preset"
-                  value={dateFilter.preset}
-                  onChange={handleDateFilterChange}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
-                  disabled={loading}
-                >
-                    <option value="Last 7 Days">Last 7 Days (Default)</option>
-                    <option value="All">All Tasks</option>
-                    <option value="Today">Today</option>
-                    <option value="Yesterday">Yesterday</option>
-                    <option value="Last 1 Month">Last 1 Month</option>
-                    <option value="Last 3 Months">Last 3 Months</option> {/* ADDED */}
-                    <option value="Last 6 Months">Last 6 Months</option> {/* ADDED */}
-                    <option value="Last 9 Months">Last 9 Months</option> {/* ADDED */}
-                    <option value="Last 1 Year">Last 1 Year</option>
-                    <option value="Specific Date">Specific Date Range</option>
-                </select>
-              </div>
-
-              {dateFilter.preset === "Specific Date" && (
-                <>
-                  <div className="min-w-[140px]">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Start Date
-                    </label>
-                    <input
-                      type="date"
-                      name="startDate"
-                      value={dateFilter.startDate}
-                      onChange={handleDateFilterChange}
-                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="min-w-[140px]">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        End Date
-                    </label>
-                    <input
-                      type="date"
-                      name="endDate"
-                      value={dateFilter.endDate}
-                      onChange={handleDateFilterChange}
-                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition"
-                      disabled={loading}
-                      min={dateFilter.startDate}
-                    />
-                  </div>
-                </>
-              )}
-
-
-              <button
-                onClick={handleFetch}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-lg transition duration-200 shadow-md h-[42px] mt-2 md:mt-0"
-                style={{ whiteSpace: "nowrap" }}
-                disabled={loading}
-              >
-                {loading ? "Loading..." : "Fetch Tasks"}
-              </button>
-            </div>
+        {/* Message (Already text-black) */}
+        {message && (
+          <div className="bg-white border border-gray-300 text-black px-4 py-3 rounded-xl mb-6 font-semibold shadow-lg text-sm sm:text-base">
+            {message}
           </div>
+        )}
 
-          {message && (
-            <div
-              className={`bg-white border ${
-                message.includes("success")
-                  ? "border-green-300 text-green-800"
-                  : "border-red-500 text-red-700"
-              } px-4 py-3 rounded-lg mb-6 font-medium`}
-            >
-              {message}
-            </div>
-          )}
-
-          {tasks.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-xl overflow-hidden">
+        {/* Table Section - Desktop */}
+        {tasks.length > 0 && (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden lg:block bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-100 border-b border-gray-200">
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800 w-12"></th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Emp ID</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Project</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Name</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Plan</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Done</th>
-                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-800">%</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Status</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Remarks</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Start Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Due Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>End Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800" style={{minWidth: '100px'}}><Clock className="inline w-4 h-4 mr-1"/>Time Spent</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Type</th>
-                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-800">Actions</th>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Type</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Date</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Employee ID</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Project</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">%</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Status</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Remarks</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><Clock className="inline w-3 h-3 mr-1"/>Time</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Subtasks</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tasks.map((task, idx) =>
-                      editingTask?._id === task._id
-                        ? RenderEditRow(editingTask)
-                        : RenderTaskRow(task, idx)
-                    )}
+                    {/* Use sortedTasks instead of tasks */}
+                    {sortedTasks.map((task, idx) => (
+                      <React.Fragment key={task._id}>
+                        {editingTaskId === task._id ? (
+                          // Edit Mode Row
+                          <tr className="bg-blue-50 border-b border-blue-200">
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="text"
+                                value={editFormData?.project || ""}
+                                onChange={(e) => handleEditChange("project", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="number"
+                                value={editFormData?.completion || ""}
+                                onChange={(e) => handleEditChange("completion", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-center text-black" 
+                                min="0"
+                                max="100"
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <select
+                                value={editFormData?.status || ""}
+                                onChange={(e) => handleEditChange("status", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Completed">Completed</option>
+                              </select>
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="text"
+                                value={editFormData?.remarks || ""}
+                                onChange={(e) => handleEditChange("remarks", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="date"
+                                value={editFormData?.startDate?.split("T")[0] || ""}
+                                onChange={(e) => handleEditChange("startDate", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="date"
+                                value={editFormData?.dueDate?.split("T")[0] || ""}
+                                onChange={(e) => handleEditChange("dueDate", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="date"
+                                value={editFormData?.endDate?.split("T")[0] || ""}
+                                onChange={(e) => handleEditChange("endDate", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4">
+                              <input
+                                type="text"
+                                value={editFormData?.timeSpent || ""}
+                                onChange={(e) => handleEditChange("timeSpent", e.target.value)}
+                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                placeholder="e.g., 2h 30m"
+                              />
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
+                              {/* Always show toggle button if subtasks exist */}
+                              {(task.subtasks && task.subtasks.length > 0) || (editFormData?.subtasks && editFormData.subtasks.length > 0) ? (
+                                <button onClick={() => toggleExpand(task._id)} className="text-black hover:text-gray-700 transition-colors">
+                                  {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                </button>
+                              ) : "-"}
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
+                              <div className="flex gap-2 justify-center">
+                                <button
+                                  onClick={saveEdit}
+                                  className="p-1 bg-green-500 text-white rounded hover:bg-green-600"
+                                  title="Save"
+                                >
+                                  <Save className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={cancelEditing}
+                                  className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                  title="Cancel"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                {/* ⭐ NEW: Add Subtask Button for Desktop */}
+                                <button
+                                  onClick={addSubtask}
+                                  className="p-1 bg-purple-500 text-white rounded hover:bg-purple-600"
+                                  title="Add Subtask"
+                                >
+                                  <Plus className="w-4 h-4" /> 
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          // View Mode Row
+                          <tr className={`border-b border-gray-200 hover:bg-gray-50 transition ${idx % 2 === 0 ? "bg-white" : "bg-gray-100"}`}>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">{task.completion || "0"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm">
+                              {/* Status text set to black */}
+                              <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-black" : task.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                                {task.status || "N/A"}
+                              </span>
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.remarks || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.startDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.dueDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.endDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.timeSpent || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
+                              {task.subtasks && task.subtasks.length > 0 ? (
+                                <button onClick={() => toggleExpand(task._id)} className="text-black hover:text-gray-700 transition-colors">
+                                  {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                </button>
+                              ) : "-"}
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
+                              <button
+                                onClick={() => startEditing(task)}
+                                className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                title="Edit Task"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        )}
+
+                        {expanded === task._id && editFormData?.subtasks && editingTaskId === task._id ? (
+                            // Subtask Edit View (using editFormData)
+                            editFormData.subtasks.map((subtask, subIdx) => (
+                                <tr key={`${task._id}-sub-${subIdx}`} className="bg-gray-100 border-b border-gray-200">
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-black pl-8 xl:pl-12">Subtask</td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                                    
+                                    {/* Subtask Title Input */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3" colSpan={3}>
+                                        <input
+                                            type="text"
+                                            value={subtask.title || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "title", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                        />
+                                    </td>
+                                    {/* Completion Input */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="number"
+                                            value={subtask.completion || 0}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "completion", Number(e.target.value))}
+                                            className="w-full px-2 py-1 border rounded text-xs text-center text-black" 
+                                            min="0"
+                                            max="100"
+                                        />
+                                    </td>
+                                    {/* Status Select */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <select
+                                            value={subtask.status || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "status", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                        >
+                                            <option value="Pending">Pending</option>
+                                            <option value="In Progress">In Progress</option>
+                                            <option value="Completed">Completed</option>
+                                        </select>
+                                    </td>
+                                    {/* Remarks Input */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="text"
+                                            value={subtask.remarks || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "remarks", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                        />
+                                    </td>
+                                    {/* Date Inputs */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="date"
+                                            value={subtask.startDate?.split("T")[0] || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "startDate", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                        />
+                                    </td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="date"
+                                            value={subtask.dueDate?.split("T")[0] || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "dueDate", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                        />
+                                    </td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="date"
+                                            value={subtask.endDate?.split("T")[0] || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "endDate", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                        />
+                                    </td>
+                                    {/* Time Spent Input */}
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3">
+                                        <input
+                                            type="text"
+                                            value={subtask.timeSpent || ""}
+                                            onChange={(e) => handleSubtaskChange(subIdx, "timeSpent", e.target.value)}
+                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                        />
+                                    </td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
+                                </tr>
+                            ))
+                        ) : (
+                          // Subtask View Mode (using task.subtasks)
+                          expanded === task._id && task.subtasks && task.subtasks.map((subtask, subIdx) => (
+                            <tr key={`${task._id}-sub-${subIdx}`} className="bg-gray-100 border-b border-gray-200">
+                              {/* Subtask label set to black */}
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-black pl-8 xl:pl-12">Subtask</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                              
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black font-semibold" colSpan={3}>{subtask.title}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-center text-xs xl:text-sm font-bold text-black">{subtask.completion}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm">
+                                {/* Status text set to black */}
+                                <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-black" : subtask.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                                  {subtask.status}
+                                </span>
+                              </td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.remarks || "-"}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.startDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.dueDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.endDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.timeSpent || "-"}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
+                            </tr>
+                          ))
+                        )}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
-          )}
-          {tasks.length === 0 && allTasks.length > 0 && !message && (
-             <div className="bg-white border border-yellow-500 text-yellow-700 px-4 py-3 rounded-lg mb-6 font-medium">
-                No tasks found for the selected date filter: **{dateFilter.preset}** ({dateFilter.preset === "Specific Date" ? `${dateFilter.startDate} to ${dateFilter.endDate}` : getDatesForFilter(dateFilter.preset, dateFilter.startDate).start + ' to ' + getDatesForFilter(dateFilter.preset, dateFilter.startDate).end}).
-             </div>
-          )}
-        </div>
-      </div>
 
-      {successToast && (
-        <Toast message={successToast} onClose={() => setSuccessToast("")} />
-      )}
+            {/* Mobile/Tablet Card View */}
+            <div className="lg:hidden space-y-4">
+              {/* Use sortedTasks instead of tasks */}
+              {sortedTasks.map((task, idx) => (
+                <div key={task._id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                  {editingTaskId === task._id ? (
+                    // Edit Mode Card
+                    <div className="bg-blue-50 p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-lg text-black">Edit Task</h3>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={saveEdit}
+                            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                          >
+                            <Save className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-semibold text-black mb-1">Project</label>
+                          <input
+                            type="text"
+                            value={editFormData?.project || ""}
+                            onChange={(e) => handleEditChange("project", e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-black mb-1">Completion %</label>
+                            <input
+                              type="number"
+                              value={editFormData?.completion || ""}
+                              onChange={(e) => handleEditChange("completion", e.target.value)}
+                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              min="0"
+                              max="100"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-black mb-1">Status</label>
+                            <select
+                              value={editFormData?.status || ""}
+                              onChange={(e) => handleEditChange("status", e.target.value)}
+                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-black mb-1">Remarks</label>
+                          <textarea
+                            value={editFormData?.remarks || ""}
+                            onChange={(e) => handleEditChange("remarks", e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                            rows={2}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-black mb-1">Start Date</label>
+                            <input
+                              type="date"
+                              value={editFormData?.startDate?.split("T")[0] || ""}
+                              onChange={(e) => handleEditChange("startDate", e.target.value)}
+                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-black mb-1">Due Date</label>
+                            <input
+                              type="date"
+                              value={editFormData?.dueDate?.split("T")[0] || ""}
+                              onChange={(e) => handleEditChange("dueDate", e.target.value)}
+                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-black mb-1">End Date</label>
+                            <input
+                              type="date"
+                              value={editFormData?.endDate?.split("T")[0] || ""}
+                              onChange={(e) => handleEditChange("endDate", e.target.value)}
+                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-black mb-1">Time Spent</label>
+                          <input
+                            type="text"
+                            value={editFormData?.timeSpent || ""}
+                            onChange={(e) => handleEditChange("timeSpent", e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                            placeholder="e.g., 2h 30m"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Subtasks Section for Mobile Edit */}
+                      <div className="mt-4 pt-4 border-t border-gray-300">
+                        <h4 className="font-bold text-sm mb-3 text-black flex justify-between items-center">
+                            <span>Subtasks</span>
+                            {/* ⭐ NEW: Add Subtask Button for Mobile */}
+                            <button
+                                onClick={addSubtask}
+                                className="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-1"
+                                title="Add Subtask"
+                            >
+                                <Plus className="w-3 h-3" /> Add
+                            </button>
+                        </h4> 
+                        <div className="space-y-3">
+                          {(editFormData?.subtasks || []).map((subtask, subIdx) => (
+                            <div key={subIdx} className="bg-white p-3 rounded-lg border border-gray-300">
+                              <div>
+                                <label className="block text-xs font-semibold text-black mb-1">Title</label>
+                                <input
+                                  type="text"
+                                  value={subtask.title || ""}
+                                  onChange={(e) => handleSubtaskChange(subIdx, "title", e.target.value)}
+                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div>
+                                  <label className="block text-xs font-semibold text-black mb-1">Completion %</label>
+                                  <input
+                                    type="number"
+                                    value={subtask.completion || 0}
+                                    onChange={(e) => handleSubtaskChange(subIdx, "completion", Number(e.target.value))}
+                                    className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                    min="0"
+                                    max="100"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-black mb-1">Status</label>
+                                  <select
+                                    value={subtask.status || ""}
+                                    onChange={(e) => handleSubtaskChange(subIdx, "status", e.target.value)}
+                                    className="w-full px-2 py-1 border rounded text-sm text-black"
+                                  >
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <label className="block text-xs font-semibold text-black mb-1">Remarks</label>
+                                <input
+                                  type="text"
+                                  value={subtask.remarks || ""}
+                                  onChange={(e) => handleSubtaskChange(subIdx, "remarks", e.target.value)}
+                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 mt-2">
+                                <div>
+                                  <label className="block text-xs font-semibold text-black mb-1">Start</label>
+                                  <input
+                                    type="date"
+                                    value={subtask.startDate?.split("T")[0] || ""}
+                                    onChange={(e) => handleSubtaskChange(subIdx, "startDate", e.target.value)}
+                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-black mb-1">Due</label>
+                                  <input
+                                    type="date"
+                                    value={subtask.dueDate?.split("T")[0] || ""}
+                                    onChange={(e) => handleSubtaskChange(subIdx, "dueDate", e.target.value)}
+                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-black mb-1">End</label>
+                                  <input
+                                    type="date"
+                                    value={subtask.endDate?.split("T")[0] || ""}
+                                    onChange={(e) => handleSubtaskChange(subIdx, "endDate", e.target.value)}
+                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                  />
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <label className="block text-xs font-semibold text-black mb-1">Time Spent</label>
+                                <input
+                                  type="text"
+                                  value={subtask.timeSpent || ""}
+                                  onChange={(e) => handleSubtaskChange(subIdx, "timeSpent", e.target.value)}
+                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                  placeholder="e.g., 1h 15m"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    // View Mode Card
+                    <>
+                      <div className="bg-gray-50 p-3 sm:p-4 border-b border-gray-200">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="inline-block px-2 sm:px-3 py-1 bg-black text-white text-xs font-bold rounded-full mb-2">TASK</span>
+                            <h3 className="font-bold text-black text-sm sm:text-base">Project: {task.project || "N/A"}</h3>
+                            <p className="text-xs sm:text-sm text-black mt-1">Emp ID: {task.empId}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            {/* Status text set to black */}
+                            <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-black" : task.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                              {task.status || "N/A"}
+                            </span>
+                            <button
+                              onClick={() => startEditing(task)}
+                              className="p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+                              title="Edit Task"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 sm:p-4 space-y-2 text-xs sm:text-sm text-black">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><span className="font-semibold text-black">Date:</span> {formatDate(task.date)}</div>
+                          <div><span className="font-semibold text-black">Completion:</span> <span className="font-bold text-black">{task.completion || "0"}%</span></div>
+                          <div><span className="font-semibold text-black">Time Spent:</span> {task.timeSpent || "-"}</div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
+                          <div className="flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3 text-green-600" />
+                            <span className="font-semibold text-black">Start:</span> {formatDate(task.startDate)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3 text-yellow-600" />
+                            <span className="font-semibold text-black">Due:</span> {formatDate(task.dueDate)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3 text-red-600" />
+                            <span className="font-semibold text-black">End:</span> {formatDate(task.endDate)}
+                          </div>
+                        </div>
+                        
+                        {task.remarks && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <span className="font-semibold text-black">Remarks:</span>
+                            <p className="text-black mt-1">{task.remarks}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {task.subtasks && task.subtasks.length > 0 && (
+                        <div className="border-t border-gray-200">
+                          <button
+                            onClick={() => toggleExpand(task._id)}
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 hover:bg-gray-100 transition-all flex items-center justify-between font-semibold text-black text-xs sm:text-sm"
+                          >
+                            <span>Subtasks ({task.subtasks.length})</span>
+                            {expanded === task._id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          
+                          {expanded === task._id && (
+                            <div className="bg-white p-3 sm:p-4 space-y-3">
+                              {task.subtasks.map((subtask, subIdx) => (
+                                <div key={`${task._id}-sub-${subIdx}`} className="bg-gray-50 rounded-lg p-3 shadow-md border border-gray-200">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <h4 className="font-semibold text-black text-xs sm:text-sm">{subtask.title}</h4>
+                                    {/* Status text set to black */}
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-black" : subtask.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                                      {subtask.status}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-2 text-xs text-black">
+                                    <div><span className="font-semibold text-black">Completion:</span> <span className="font-bold text-black">{subtask.completion}%</span></div>
+                                    <div><span className="font-semibold text-black">Time:</span> {subtask.timeSpent || "-"}</div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2 text-xs text-black">
+                                    <div className="flex items-center gap-1">
+                                      <CalendarDays className="w-3 h-3 text-green-600" />
+                                      <span className="font-semibold">Start:</span> {formatDate(subtask.startDate)}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <CalendarDays className="w-3 h-3 text-yellow-600" />
+                                      <span className="font-semibold">Due:</span> {formatDate(subtask.dueDate)}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <CalendarDays className="w-3 h-3 text-red-600" />
+                                      <span className="font-semibold">End:</span> {formatDate(subtask.endDate)}
+                                    </div>
+                                  </div>
+                                  
+                                  {subtask.remarks && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-black">
+                                      <span className="font-semibold text-black">Remarks:</span>
+                                      <p className="text-black mt-1">{subtask.remarks}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

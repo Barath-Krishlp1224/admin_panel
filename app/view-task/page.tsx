@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays, Filter } from "lucide-react";
+import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays } from "lucide-react";
 
 // --- INTERFACES ---
 interface Subtask {
@@ -16,24 +16,33 @@ interface Subtask {
   timeSpent?: string;
 }
 
+// ✅ UPDATED Task interface to remove 'name', 'plan', and 'done'
 interface Task {
   _id: string;
+  // ❌ Removed 'date' (though still used in filter)
   empId: string;
-  project?: string;
-  completion?: string;
-  status?: string;
+  project?: string; // Made optional as per model
+  // ❌ Removed 'name'
+  // ❌ Removed 'plan'
+  // ❌ Removed 'done'
+  completion?: string; // Made optional
+  status?: string;     // Made optional
   remarks?: string;
   subtasks?: Subtask[];
+
   startDate?: string;
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
+
+  // Keeping 'date' for filtering/display legacy tasks, even if model dropped it
   date?: string; 
 }
 
 // -----------------------------------------------------------
 
 const ViewTaskPage: React.FC = () => {
+  // 📌 Removed 'name' from search criteria as it was removed from the model
   const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
   const [searchValue, setSearchValue] = useState(""); 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -42,7 +51,7 @@ const ViewTaskPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState("today");
   const [selectedDate, setSelectedDate] = useState<string>("");
 
-  const parseDate = (dateStr?: string) => new Date(dateStr || new Date());
+  const parseDate = (dateStr?: string) => new Date(dateStr || new Date()); // Handle potentially undefined date
 
   const isFetchEnabled = useMemo(() => {
     return searchCriteria.trim() !== "" && searchValue.trim() !== "";
@@ -67,6 +76,7 @@ const ViewTaskPage: React.FC = () => {
         d1.getDate() === d2.getDate();
 
     return tasks.filter((task) => {
+      // Use 'startDate' for filtering if 'date' is unavailable, or skip if no date is present
       const dateToFilter = task.date || task.startDate;
       if (!dateToFilter) return timeRange === "all";
 
@@ -114,6 +124,8 @@ const ViewTaskPage: React.FC = () => {
       const params = new URLSearchParams();
       params.append(searchCriteria, searchValue);
 
+      // ⚠️ Note: If you were searching by 'name' previously, you might need a new API endpoint.
+      // Assuming existing /getByEmpId or similar now handles all search criteria via query params.
       const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
       const data = await res.json();
 
@@ -146,9 +158,13 @@ const ViewTaskPage: React.FC = () => {
     const worksheetData = tasksToDownload.flatMap((t) => {
       const taskRow = {
         Type: "Task",
+        // Keeping 'Date' for legacy/filtering purposes
         Date: t.date ? t.date.split("T")[0] : "",
         "Employee ID": t.empId,
         Project: t.project || "",
+        // ❌ Removed 'Name' column (it was t.name)
+        // ❌ Removed 'Plan' column (it was t.plan)
+        // ❌ Removed 'Done' column (it was t.done)
         "Completion %": t.completion || "0",
         Status: t.status || "N/A",
         Remarks: t.remarks || "",
@@ -163,7 +179,9 @@ const ViewTaskPage: React.FC = () => {
         Date: t.date ? t.date.split("T")[0] : "",
         "Employee ID": t.empId,
         Project: t.project || "",
-        "Subtask Name": st.title,
+        "Subtask Name": st.title, // Use 'Subtask Name' for subtask title
+        // ❌ Removed 'Plan'
+        // ❌ Removed 'Done'
         "Completion %": st.completion,
         Status: st.status,
         Remarks: st.remarks || "",
@@ -203,31 +221,29 @@ const ViewTaskPage: React.FC = () => {
     dateString ? dateString.split("T")[0] : "-";
 
   return (
-    <div className="min-h-screen "> 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-10 lg:px-8 py-8 pt-20">
+    <div className="min-h-screen"> 
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 pt-16 sm:pt-20 md:pt-24">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-1 h-12 bg-white rounded-full"></div>
-            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-white">
-              Task Management
-            </h1>
-          </div>
+        <div className="mt-[10%]">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl font-extrabold text-white mb-5">
+            Employee Tasks Dashboard
+          </h1>
         </div>
 
         {/* Filters Section */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-6 mb-6 hover:shadow-2xl transition-all duration-300">
-          <div className="flex items-center gap-2 mb-6">
-            <Filter className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-800">Search & Filter</h2>
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-3 sm:p-4 md:p-6 mb-6 sm:mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-black">
+              Filters & Search
+            </h2>
           </div>
 
-          <div className="space-y-5"> 
+          <div className={`space-y-4`}> 
             {/* Search Criteria and Input */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-blue-600" />
+                <label className="block text-xs sm:text-sm font-bold text-gray-800 mb-2">
+                  <Search className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   Search By
                 </label>
                 <select
@@ -236,7 +252,7 @@ const ViewTaskPage: React.FC = () => {
                     setSearchCriteria(e.target.value as "empId" | "project" | "");
                     setSearchValue("");
                   }}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-300"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-black text-sm sm:text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white shadow-sm"
                 >
                   <option value="" disabled>Select Field</option>
                   <option value="empId">Employee ID</option>
@@ -245,7 +261,7 @@ const ViewTaskPage: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-bold text-gray-800 mb-2">
                   Search Value
                 </label>
                 <input
@@ -254,22 +270,22 @@ const ViewTaskPage: React.FC = () => {
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
                   disabled={searchCriteria === ""}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 disabled:bg-slate-50 disabled:cursor-not-allowed bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-300"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-black text-sm sm:text-base placeholder-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white shadow-sm focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Time Range and Date */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-blue-600" />
+                <label className="block text-xs sm:text-sm font-bold text-gray-800 mb-2">
+                  <Calendar className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   Time Range
                 </label>
                 <select
                   value={timeRange}
                   onChange={(e) => setTimeRange(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-300"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-black text-sm sm:text-base bg-white shadow-sm focus:ring-2 focus:ring-blue-500 transition-all"
                 >
                   <option value="today">Today</option>
                   <option value="yesterday">Yesterday</option>
@@ -281,47 +297,47 @@ const ViewTaskPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-blue-600" />
+                <label className="block text-xs sm:text-sm font-bold text-gray-800 mb-2">
+                  <Calendar className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                   Select Date
                 </label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl text-slate-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-slate-300"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl text-black text-sm sm:text-base bg-white shadow-sm focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 pt-2">
               <button
                 onClick={handleFetch}
                 disabled={!isFetchEnabled}
-                className={`w-full font-semibold px-5 py-3.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${
+                className={`w-full font-bold px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-all transform hover:scale-105 text-sm sm:text-base shadow-lg ${
                   isFetchEnabled
-                    ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 transform hover:-translate-y-0.5"
-                    : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    ? "bg-green-600 text-white hover:bg-green-700"
+                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
                 }`}
               >
-                <Search className="w-4 h-4" />
+                <Search className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 Fetch Tasks
               </button>
 
               <button
                 onClick={() => downloadTasks(tasks, `${searchCriteria ? `${searchCriteria}_${searchValue}` : "Filtered"}_Tasks.xlsx`)}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold px-5 py-3.5 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white font-bold px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg text-sm sm:text-base"
               >
-                <Download className="w-4 h-4" />
+                <Download className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 Download Filtered
               </button>
 
               <button
                 onClick={downloadAllTasks}
-                className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold px-5 py-3.5 rounded-xl hover:from-indigo-600 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                className="w-full xs:col-span-2 lg:col-span-1 bg-green-600 text-white font-bold px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl hover:bg-green-700 transition-all transform hover:scale-105 shadow-lg text-sm sm:text-base"
               >
-                <Download className="w-4 h-4" />
+                <Download className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 Download All
               </button>
             </div>
@@ -330,8 +346,8 @@ const ViewTaskPage: React.FC = () => {
 
         {/* Message */}
         {message && (
-          <div className="bg-amber-50 border-l-4 border-amber-500 text-amber-800 px-5 py-4 rounded-xl mb-6 shadow-md">
-            <p className="font-medium">{message}</p>
+          <div className="bg-white border border-gray-300 text-black px-4 py-3 rounded-xl mb-6 font-semibold shadow-lg text-sm sm:text-base">
+            {message}
           </div>
         )}
 
@@ -339,93 +355,78 @@ const ViewTaskPage: React.FC = () => {
         {tasks.length > 0 && (
           <>
             {/* Desktop Table View */}
-            <div className="hidden lg:block bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 overflow-hidden hover:shadow-2xl transition-all duration-300">
+            <div className="hidden lg:block bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gradient-to-r from-slate-50 to-blue-50 border-b-2 border-slate-200">
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Type</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Date</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Employee ID</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Project</th>
-                      <th className="px-5 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">%</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Remarks</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
-                      <th className="px-5 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{minWidth: '100px'}}><Clock className="inline w-3 h-3 mr-1"/>Time</th>
-                      <th className="px-5 py-4 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">Actions</th>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Type</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Date</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Employee ID</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Project</th>
+                      {/* ❌ Removed 'Name' */}
+                      {/* ❌ Removed 'Plan' */}
+                      {/* ❌ Removed 'Done' */}
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">%</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Status</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Remarks</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><Clock className="inline w-3 h-3 mr-1"/>Time</th>
+                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Subtasks</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {tasks.map((task, idx) => (
                       <React.Fragment key={task._id}>
-                        <tr className={`hover:bg-blue-50/50 transition-colors duration-200 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/30"}`}>
-                          <td className="px-5 py-4 text-sm">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-                              Task
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{formatDate(task.date)}</td>
-                          <td className="px-5 py-4 text-sm font-semibold text-slate-800">{task.empId}</td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{task.project || "-"}</td>
-                          <td className="px-5 py-4 text-center">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 text-sm font-bold text-blue-700">
-                              {task.completion || "0"}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-sm">
-                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${task.status === "Completed" ? "bg-emerald-100 text-emerald-700" : task.status === "In Progress" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+                        <tr className={`border-b border-gray-200 hover:bg-gray-50 transition ${idx % 2 === 0 ? "bg-white" : "bg-gray-100"}`}>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                          {/* ❌ Removed 'Name' cell (was task.name) */}
+                          {/* ❌ Removed 'Plan' cell (was task.plan) */}
+                          {/* ❌ Removed 'Done' cell (was task.done) */}
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">{task.completion || "0"}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm">
+                            <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-green-800" : task.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
                               {task.status || "N/A"}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-sm text-slate-600 max-w-xs truncate">{task.remarks || "-"}</td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{formatDate(task.startDate)}</td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{formatDate(task.dueDate)}</td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{formatDate(task.endDate)}</td>
-                          <td className="px-5 py-4 text-sm text-slate-600">{task.timeSpent || "-"}</td>
-                          <td className="px-5 py-4 text-center">
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.remarks || "-"}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.startDate)}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.dueDate)}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.endDate)}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.timeSpent || "-"}</td>
+                          <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
                             {task.subtasks && task.subtasks.length > 0 ? (
-                              <button 
-                                onClick={() => toggleExpand(task._id)} 
-                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all duration-200"
-                              >
+                              <button onClick={() => toggleExpand(task._id)} className="text-black hover:text-gray-700 transition-colors">
                                 {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                               </button>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
+                            ) : "-"}
                           </td>
                         </tr>
 
                         {expanded === task._id && task.subtasks && task.subtasks.map((subtask, subIdx) => (
-                          <tr key={`${task._id}-sub-${subIdx}`} className="bg-gradient-to-r from-slate-50 to-blue-50/30 border-l-4 border-blue-400">
-                            <td className="px-5 py-3 text-sm pl-12">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
-                                Subtask
-                              </span>
-                            </td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{formatDate(task.date)}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{task.empId}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{task.project || "-"}</td>
-                            <td className="px-5 py-3 text-sm font-semibold text-slate-800" colSpan={3}>{subtask.title}</td> 
-                            <td className="px-5 py-3 text-center">
-                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 text-xs font-bold text-indigo-700">
-                                {subtask.completion}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3 text-sm">
-                              <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${subtask.status === "Completed" ? "bg-emerald-100 text-emerald-700" : subtask.status === "In Progress" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+                          <tr key={`${task._id}-sub-${subIdx}`} className="bg-gray-100 border-b border-gray-200">
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-gray-700 pl-8 xl:pl-12">Subtask</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black font-semibold" colSpan={3}>{subtask.title}</td> 
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-center text-xs xl:text-sm font-bold text-black">{subtask.completion}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm">
+                              <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-green-800" : subtask.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
                                 {subtask.status}
                               </span>
                             </td>
-                            <td className="px-5 py-3 text-sm text-slate-600 max-w-xs truncate">{subtask.remarks || "-"}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{formatDate(subtask.startDate)}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{formatDate(subtask.dueDate)}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{formatDate(subtask.endDate)}</td>
-                            <td className="px-5 py-3 text-sm text-slate-600">{subtask.timeSpent || "-"}</td>
-                            <td className="px-5 py-3"></td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.remarks || "-"}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.startDate)}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.dueDate)}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.endDate)}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.timeSpent || "-"}</td>
+                            <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
                           </tr>
                         ))}
                       </React.Fragment>
@@ -438,146 +439,97 @@ const ViewTaskPage: React.FC = () => {
             {/* Mobile/Tablet Card View */}
             <div className="lg:hidden space-y-4">
               {tasks.map((task, idx) => (
-                <div key={task._id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden hover:shadow-2xl transition-all duration-300">
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-slate-200">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <span className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full mb-2">
-                          TASK
-                        </span>
-                        <h3 className="font-bold text-slate-800 text-base mt-2">Project: {task.project || "N/A"}</h3>
-                        <p className="text-sm text-slate-600 mt-1 flex items-center gap-2">
-                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-200 rounded-full text-xs font-semibold">
-                            {task.empId}
-                          </span>
-                        </p>
+                <div key={task._id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                  <div className="bg-gray-50 p-3 sm:p-4 border-b border-gray-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="inline-block px-2 sm:px-3 py-1 bg-black text-white text-xs font-bold rounded-full mb-2">TASK</span>
+                        {/* ⚠️ Name is removed. Displaying project name as the primary title */}
+                        <h3 className="font-bold text-black text-sm sm:text-base">Project: {task.project || "N/A"}</h3>
+                        <p className="text-xs sm:text-sm text-gray-700 mt-1">Emp ID: {task.empId}</p>
                       </div>
-                      <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${task.status === "Completed" ? "bg-emerald-100 text-emerald-700" : task.status === "In Progress" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-green-800" : task.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
                         {task.status || "N/A"}
                       </span>
                     </div>
                   </div>
                   
-                  <div className="p-4 space-y-3 text-sm">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-slate-50 rounded-lg p-3">
-                        <span className="text-xs font-semibold text-slate-500 block mb-1">Date</span>
-                        <span className="text-slate-800 font-medium">{formatDate(task.date)}</span>
-                      </div>
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <span className="text-xs font-semibold text-slate-500 block mb-1">Completion</span>
-                        <span className="text-blue-700 font-bold text-lg">{task.completion || "0"}%</span>
-                      </div>
+                  <div className="p-3 sm:p-4 space-y-2 text-xs sm:text-sm text-black">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><span className="font-semibold text-gray-800">Date:</span> {formatDate(task.date)}</div>
+                      {/* ❌ Removed Plan and Done rows */}
+                      <div><span className="font-semibold text-gray-800">Completion:</span> <span className="font-bold text-black">{task.completion || "0"}%</span></div>
+                      <div><span className="font-semibold text-gray-800">Time Spent:</span> {task.timeSpent || "-"}</div>
                     </div>
                     
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <span className="text-xs font-semibold text-slate-500 block mb-1 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Time Spent
-                      </span>
-                      <span className="text-slate-800 font-medium">{task.timeSpent || "-"}</span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
-                      <div className="bg-emerald-50 rounded-lg p-2 flex flex-col">
-                        <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 mb-1">
-                          <CalendarDays className="w-3 h-3" />
-                          Start
-                        </span>
-                        <span className="text-slate-800 text-xs font-medium">{formatDate(task.startDate)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3 text-green-600" />
+                        <span className="font-semibold text-gray-800">Start:</span> {formatDate(task.startDate)}
                       </div>
-                      <div className="bg-amber-50 rounded-lg p-2 flex flex-col">
-                        <span className="text-xs font-semibold text-amber-600 flex items-center gap-1 mb-1">
-                          <CalendarDays className="w-3 h-3" />
-                          Due
-                        </span>
-                        <span className="text-slate-800 text-xs font-medium">{formatDate(task.dueDate)}</span>
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3 text-yellow-600" />
+                        <span className="font-semibold text-gray-800">Due:</span> {formatDate(task.dueDate)}
                       </div>
-                      <div className="bg-rose-50 rounded-lg p-2 flex flex-col">
-                        <span className="text-xs font-semibold text-rose-600 flex items-center gap-1 mb-1">
-                          <CalendarDays className="w-3 h-3" />
-                          End
-                        </span>
-                        <span className="text-slate-800 text-xs font-medium">{formatDate(task.endDate)}</span>
+                      <div className="flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3 text-red-600" />
+                        <span className="font-semibold text-gray-800">End:</span> {formatDate(task.endDate)}
                       </div>
                     </div>
                     
                     {task.remarks && (
-                      <div className="pt-3 border-t border-slate-200">
-                        <span className="text-xs font-semibold text-slate-500 block mb-1">Remarks</span>
-                        <p className="text-slate-700 text-sm leading-relaxed">{task.remarks}</p>
+                      <div className="pt-2 border-t border-gray-200">
+                        <span className="font-semibold text-gray-800">Remarks:</span>
+                        <p className="text-black mt-1">{task.remarks}</p>
                       </div>
                     )}
                   </div>
 
                   {task.subtasks && task.subtasks.length > 0 && (
-                    <div className="border-t border-slate-200">
+                    <div className="border-t border-gray-200">
                       <button
                         onClick={() => toggleExpand(task._id)}
-                        className="w-full px-4 py-3 bg-gradient-to-r from-slate-50 to-blue-50 hover:from-slate-100 hover:to-blue-100 transition-all flex items-center justify-between font-semibold text-slate-700 text-sm"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 hover:bg-gray-100 transition-all flex items-center justify-between font-semibold text-black text-xs sm:text-sm"
                       >
-                        <span className="flex items-center gap-2">
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
-                            {task.subtasks.length}
-                          </span>
-                          Subtasks
-                        </span>
-                        {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                        <span>Subtasks ({task.subtasks.length})</span>
+                        {expanded === task._id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
                       
                       {expanded === task._id && (
-                        <div className="bg-gradient-to-br from-slate-50 to-blue-50 p-4 space-y-3">
+                        <div className="bg-white p-3 sm:p-4 space-y-3">
                           {task.subtasks.map((subtask, subIdx) => (
-                            <div key={`${task._id}-sub-${subIdx}`} className="bg-white rounded-xl p-4 shadow-md border border-slate-100 hover:shadow-lg transition-all duration-200">
-                              <div className="flex justify-between items-start mb-3">
-                                <h4 className="font-semibold text-slate-800 text-sm flex-1 pr-2">{subtask.title}</h4>
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${subtask.status === "Completed" ? "bg-emerald-100 text-emerald-700" : subtask.status === "In Progress" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+                            <div key={`${task._id}-sub-${subIdx}`} className="bg-gray-50 rounded-lg p-3 shadow-md border border-gray-200">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-semibold text-black text-xs sm:text-sm">{subtask.title}</h4>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-green-800" : subtask.status === "In Progress" ? "bg-yellow-200 text-yellow-800" : "bg-gray-200 text-gray-700"}`}>
                                   {subtask.status}
                                 </span>
                               </div>
                               
-                              <div className="grid grid-cols-2 gap-2 mb-3">
-                                <div className="bg-indigo-50 rounded-lg p-2">
-                                  <span className="text-xs font-semibold text-slate-500 block mb-1">Completion</span>
-                                  <span className="text-indigo-700 font-bold text-base">{subtask.completion}%</span>
-                                </div>
-                                <div className="bg-slate-50 rounded-lg p-2">
-                                  <span className="text-xs font-semibold text-slate-500 block mb-1 flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    Time
-                                  </span>
-                                  <span className="text-slate-800 font-medium text-sm">{subtask.timeSpent || "-"}</span>
-                                </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-black">
+                                <div><span className="font-semibold text-gray-800">Completion:</span> <span className="font-bold text-black">{subtask.completion}%</span></div>
+                                <div><span className="font-semibold text-gray-800">Time:</span> {subtask.timeSpent || "-"}</div>
                               </div>
                               
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                                <div className="bg-emerald-50 rounded-lg p-2 flex flex-col">
-                                  <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 mb-1">
-                                    <CalendarDays className="w-3 h-3" />
-                                    Start
-                                  </span>
-                                  <span className="text-slate-800 text-xs font-medium">{formatDate(subtask.startDate)}</span>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2 text-xs text-black">
+                                <div className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3 text-green-600" />
+                                  <span className="font-semibold">Start:</span> {formatDate(subtask.startDate)}
                                 </div>
-                                <div className="bg-amber-50 rounded-lg p-2 flex flex-col">
-                                  <span className="text-xs font-semibold text-amber-600 flex items-center gap-1 mb-1">
-                                    <CalendarDays className="w-3 h-3" />
-                                    Due
-                                  </span>
-                                  <span className="text-slate-800 text-xs font-medium">{formatDate(subtask.dueDate)}</span>
+                                <div className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3 text-yellow-600" />
+                                  <span className="font-semibold">Due:</span> {formatDate(subtask.dueDate)}
                                 </div>
-                                <div className="bg-rose-50 rounded-lg p-2 flex flex-col">
-                                  <span className="text-xs font-semibold text-rose-600 flex items-center gap-1 mb-1">
-                                    <CalendarDays className="w-3 h-3" />
-                                    End
-                                  </span>
-                                  <span className="text-slate-800 text-xs font-medium">{formatDate(subtask.endDate)}</span>
+                                <div className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3 text-red-600" />
+                                  <span className="font-semibold">End:</span> {formatDate(subtask.endDate)}
                                 </div>
                               </div>
                               
                               {subtask.remarks && (
-                                <div className="pt-2 border-t border-slate-200">
-                                  <span className="text-xs font-semibold text-slate-500 block mb-1">Remarks</span>
-                                  <p className="text-slate-700 text-xs leading-relaxed">{subtask.remarks}</p>
+                                <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-black">
+                                  <span className="font-semibold text-gray-800">Remarks:</span>
+                                  <p className="text-black mt-1">{subtask.remarks}</p>
                                 </div>
                               )}
                             </div>

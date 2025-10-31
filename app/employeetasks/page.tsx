@@ -6,10 +6,12 @@ import {
 } from "recharts";
 import { Search, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 
-// --- Interface Definitions ---
+// --- INTERFACES (UPDATED to match the first component) ---
 interface Subtask {
   title: string;
   status: string;
+  completion: number; // Added completion back from the first component's model
+  remarks?: string;   // Added remarks back from the first component's model
   startDate?: string;
   dueDate?: string;
   endDate?: string;
@@ -18,16 +20,18 @@ interface Subtask {
 
 interface Task {
   _id: string;
-  date: string;
+  // Kept 'date' for filtering/display legacy tasks, though it was optional in the first component
+  date?: string; 
   empId: string;
-  project: string;
-  name: string;
-  plan: string;
-  done: string;
-  completion: string | number;
-  status: string;
+  project?: string; // Made optional
+  // ❌ Removed 'name'
+  // ❌ Removed 'plan'
+  // ❌ Removed 'done'
+  completion?: string | number; // Made optional
+  status?: string;     // Made optional
   remarks?: string;
   subtasks?: Subtask[];
+
   startDate?: string;
   dueDate?: string;
   endDate?: string;
@@ -51,7 +55,8 @@ interface CompletionPieData {
 // ------------------------------------------------------------------------
 
 const ViewTaskPage: React.FC = () => {
-  const [searchCriteria, setSearchCriteria] = useState<"empId" | "name" | "project" | "">(""); 
+  // 📌 UPDATED: Removed 'name' as a search criteria option
+  const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
   const [searchValue, setSearchValue] = useState(""); 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [message, setMessage] = useState("");
@@ -59,14 +64,13 @@ const ViewTaskPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
 
-  const parseDate = (dateStr: string) => {
+  const parseDate = (dateStr?: string) => { // Handle optional date
     if (!dateStr) return new Date(0); 
     return new Date(dateStr.split("T")[0]);
   };
 
-  // MODIFIED: Darker colors for charts
-  const PIE_COLORS = ["#3730a3", "#1f2937"]; // Dark Indigo, Dark Gray
-  const SUBTASK_PIE_COLORS = ["#15803d", "#0d9488", "#6d28d9"]; // Dark Green, Dark Teal, Dark Violet
+  const PIE_COLORS = ["#3730a3", "#1f2937"]; 
+  const SUBTASK_PIE_COLORS = ["#15803d", "#0d9488", "#6d28d9"]; 
 
   const isFetchEnabled = useMemo(() => {
     return searchCriteria.trim() !== "" && searchValue.trim() !== "";
@@ -80,7 +84,11 @@ const ViewTaskPage: React.FC = () => {
         d1.getDate() === d2.getDate();
 
     return tasks.filter((task) => {
-      const taskDate = parseDate(task.date);
+      // Use 'startDate' for filtering if 'date' is unavailable
+      const dateToFilter = task.date || task.startDate;
+      if (!dateToFilter) return timeRange === "all"; // Assume all if no date is present
+
+      const taskDate = parseDate(dateToFilter);
 
       if (selectedDate) {
         const selDate = parseDate(selectedDate);
@@ -106,6 +114,7 @@ const ViewTaskPage: React.FC = () => {
           const yearAgo = new Date(now);
           yearAgo.setFullYear(now.getFullYear() - 1);
           return taskDate >= yearAgo && taskDate <= now;
+        case "all": // Added 'all' case for consistency
         default:
           return true;
       }
@@ -123,14 +132,15 @@ const ViewTaskPage: React.FC = () => {
       const params = new URLSearchParams();
       params.append(searchCriteria, searchValue);
 
-      const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`);
+      // Assuming this endpoint works for empId or project search
+      const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
       const data = await res.json();
 
       if (res.ok) {
-        const allTasksForEmp = data.tasks as Task[];
+        const allTasksForEmp = Array.isArray(data.tasks) ? data.tasks : [];
         const filtered = filterTasksByDate(allTasksForEmp);
         setTasks(filtered);
-        setMessage(filtered.length === 0 ? `No tasks found for selected criteria.` : "");
+        setMessage(filtered.length === 0 ? `No tasks found for selected criteria and range.` : "");
       } else {
         setTasks([]);
         setMessage(data.error || "Failed to fetch tasks");
@@ -146,8 +156,7 @@ const ViewTaskPage: React.FC = () => {
     switch (searchCriteria) {
       case 'empId':
         return 'Enter Emp ID';
-      case 'name':
-        return 'Enter Emp Name';
+      // ❌ Removed 'name' case
       case 'project':
         return 'Enter Proj Name';
       default:
@@ -159,12 +168,23 @@ const ViewTaskPage: React.FC = () => {
     const map = new Map<string, { Completed: number; "In Progress": number; Pending: number }>();
 
     tasks.forEach((task) => {
-      if (!map.has(task.project)) {
-        map.set(task.project, { Completed: 0, "In Progress": 0, Pending: 0 });
+      // Ensure task.project is present and treat it as a string
+      const projectName = task.project || "Unassigned"; 
+      
+      if (!map.has(projectName)) {
+        map.set(projectName, { Completed: 0, "In Progress": 0, Pending: 0 });
       }
-      const counts = map.get(task.project)!;
-      if (counts.hasOwnProperty(task.status)) {
-        counts[task.status as keyof typeof counts]++;
+      
+      const counts = map.get(projectName)!;
+      // Normalizing status to one of the keys
+      const status = task.status || "Pending"; 
+      
+      if (status === "Completed") {
+        counts["Completed"]++;
+      } else if (status === "In Progress") {
+        counts["In Progress"]++;
+      } else {
+        counts["Pending"]++;
       }
     });
 
@@ -180,7 +200,10 @@ const ViewTaskPage: React.FC = () => {
     let valid = 0;
 
     tasks.forEach((t) => {
-      const val = parseFloat(String(t.completion).replace("%", "").trim());
+      // Safely parse completion, defaulting to 0 if not present or invalid
+      const completionStr = String(t.completion || "0").replace("%", "").trim();
+      const val = parseFloat(completionStr);
+      
       if (!isNaN(val)) {
         totalCompletion += val;
         valid++;
@@ -188,9 +211,12 @@ const ViewTaskPage: React.FC = () => {
     });
 
     const avg = valid > 0 ? totalCompletion / valid : 0;
+    const avgRounded = Math.round(avg);
+    const remainingRounded = Math.round(100 - avg);
+    
     return [
-      { name: "Average Completion", value: Math.round(avg) },
-      { name: "Remaining", value: Math.round(100 - avg) },
+      { name: "Average Completion", value: avgRounded },
+      { name: "Remaining", value: remainingRounded > 0 ? remainingRounded : 0 }, // Ensure remaining is not negative
     ];
   }, [tasks]);
 
@@ -202,9 +228,10 @@ const ViewTaskPage: React.FC = () => {
     tasks.forEach((task) => {
       if (task.subtasks && task.subtasks.length > 0) {
         task.subtasks.forEach((st) => {
-          if (st.status === "Completed") completed++;
-          else if (st.status === "In Progress") inProgress++;
-          else if (st.status === "Pending") pending++;
+          const status = st.status || "Pending"; // Default to Pending if status is missing
+          if (status === "Completed") completed++;
+          else if (status === "In Progress") inProgress++;
+          else pending++;
         });
       }
     });
@@ -233,7 +260,7 @@ const ViewTaskPage: React.FC = () => {
           {/* --- Filters --- */}
           <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 md:mb-8 shadow-xl">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-end">
-              {/* === Search Criteria and Input Section (Made narrower) === */}
+              {/* === Search Criteria and Input Section === */}
               <div className="sm:col-span-2 lg:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3">
                 <div>
                     <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-1.5 sm:mb-2">
@@ -243,14 +270,15 @@ const ViewTaskPage: React.FC = () => {
                     <select
                       value={searchCriteria}
                       onChange={(e) => {
-                        setSearchCriteria(e.target.value as "empId" | "name" | "project" | "");
+                        // 📌 UPDATED: Removed 'name' as an option
+                        setSearchCriteria(e.target.value as "empId" | "project" | "");
                         setSearchValue("");
                       }}
                       className="w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg text-gray-900 focus:ring-2 focus:ring-lime-500 transition-all bg-white"
                     >
                       <option value="" disabled>Select Field</option>
                       <option value="empId">Employee ID</option>
-                      <option value="name">Employee Name</option>
+                      {/* ❌ Removed 'Employee Name' option */}
                       <option value="project">Project Name</option>
                     </select>
                 </div>
@@ -394,7 +422,6 @@ const ViewTaskPage: React.FC = () => {
                           }} 
                         />
                         <Legend wrapperStyle={{ fontSize: window.innerWidth < 640 ? '12px' : '14px' }} />
-                        {/* MODIFIED: Bar Colors */}
                         <Bar dataKey="Completed" fill="#15803d" radius={[8, 8, 0, 0]} />
                         <Bar dataKey="In Progress" fill="#0d9488" radius={[8, 8, 0, 0]} />
                         <Bar dataKey="Pending" fill="#6d28d9" radius={[8, 8, 0, 0]} />
@@ -418,10 +445,11 @@ const ViewTaskPage: React.FC = () => {
                           cy="50%"
                           outerRadius={window.innerWidth < 640 ? 60 : window.innerWidth < 1024 ? 90 : 120}
                           labelLine={false}
-                          label={(entry: { name?: string; percent?: unknown }) => {
+                          label={(entry: { name?: string; value?: number }) => {
                             const name = entry.name ?? "N/A";
-                            const percentNum =
-                              typeof entry.percent === "number" ? entry.percent * 100 : 0;
+                            const value = entry.value ?? 0;
+                            const total = overallCompletionData.reduce((sum, item) => sum + item.value, 0);
+                            const percentNum = total > 0 ? (value / total) * 100 : 0;
                             return window.innerWidth < 640 ? `${percentNum.toFixed(0)}%` : `${name}: ${percentNum.toFixed(0)}%`;
                           }}
                           style={{ fontSize: window.innerWidth < 640 ? '10px' : '12px' }}
@@ -429,12 +457,12 @@ const ViewTaskPage: React.FC = () => {
                           {overallCompletionData.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={PIE_COLORS[index % PIE_COLORS.length]} // MODIFIED: PIE_COLORS is darker
+                              fill={PIE_COLORS[index % PIE_COLORS.length]} 
                             />
                           ))}
                         </Pie>
                         <Tooltip 
-                          formatter={(v: number) => `${v}%`}
+                          formatter={(v: number, name: string) => [`${v}%`, name]}
                           contentStyle={{ 
                             backgroundColor: 'rgba(255, 255, 255, 0.98)', 
                             borderRadius: '8px',
@@ -475,7 +503,7 @@ const ViewTaskPage: React.FC = () => {
                           {subtasksStatusData.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={SUBTASK_PIE_COLORS[index % SUBTASK_PIE_COLORS.length]} // MODIFIED: SUBTASK_PIE_COLORS is darker
+                              fill={SUBTASK_PIE_COLORS[index % SUBTASK_PIE_COLORS.length]} 
                             />
                           ))}
                         </Pie>

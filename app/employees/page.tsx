@@ -1,12 +1,9 @@
-"use client";
-
+"use client"
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
-// ⭐ CHANGE 1: Imported Plus icon
 import { Download, Search, Calendar, ChevronDown, ChevronUp, Clock, CalendarDays, Edit2, Save, X, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-// --- INTERFACES ---
 interface Subtask {
   title: string;
   status: string;
@@ -32,38 +29,34 @@ interface Task {
   dueDate?: string;
   endDate?: string;
   timeSpent?: string;
-  date?: string; 
+  date?: string;
 }
-
-// -----------------------------------------------------------
 
 const ViewTaskPage: React.FC = () => {
   const router = useRouter();
-  const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
-  const [searchValue, setSearchValue] = useState(""); 
+  const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">("");
+  const [searchValue, setSearchValue] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading your tasks automatically...");
   const [timeRange, setTimeRange] = useState("all");
   const [selectedDate, setSelectedDate] = useState<string>("");
-  
-  // Edit state
+
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<Task | null>(null);
 
   const parseDate = (dateStr?: string) => new Date(dateStr || new Date());
 
-  // Memoized list of tasks sorted by date (most recent first)
   const sortedTasks = useMemo(() => {
     const tasksCopy = [...tasks];
-    
+
     return tasksCopy.sort((a, b) => {
       const dateA = parseDate(a.date || a.startDate);
       const dateB = parseDate(b.date || b.startDate);
 
       return dateB.getTime() - dateA.getTime();
     });
-  }, [tasks]); 
+  }, [tasks]);
 
   const isFetchEnabled = useMemo(() => {
     return searchCriteria.trim() !== "" && searchValue.trim() !== "";
@@ -79,7 +72,7 @@ const ViewTaskPage: React.FC = () => {
         return 'Select a search field first';
     }
   };
-  
+
   const filterTasksByDate = useCallback((tasks: Task[]) => {
     const now = new Date();
     const isSameDay = (d1: Date, d2: Date) =>
@@ -132,12 +125,12 @@ const ViewTaskPage: React.FC = () => {
     }
 
     setMessage(`Fetching tasks for ${searchCriteria}: ${searchValue}...`);
-    
+
     try {
       const params = new URLSearchParams();
       params.append(searchCriteria, searchValue);
 
-      const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
+      const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`);
       const data = await res.json();
 
       if (res.ok) {
@@ -167,14 +160,13 @@ const ViewTaskPage: React.FC = () => {
         router.push('/');
     }
   }, [router]);
-  
+
   useEffect(() => {
       if (searchCriteria === 'empId' && searchValue) {
           handleFetch();
       }
   }, [searchCriteria, searchValue, handleFetch]);
 
-  // Edit handlers
   const startEditing = (task: Task) => {
     setEditingTaskId(task._id);
     setEditFormData({ ...task });
@@ -184,8 +176,7 @@ const ViewTaskPage: React.FC = () => {
     setEditingTaskId(null);
     setEditFormData(null);
   };
-  
-  // ⭐ NEW: Function to add a new subtask
+
   const addSubtask = () => {
     if (editFormData) {
       const newSubtask: Subtask = {
@@ -193,19 +184,17 @@ const ViewTaskPage: React.FC = () => {
         status: "Pending",
         completion: 0,
         remarks: "",
-        startDate: new Date().toISOString().split('T')[0], // Set current date as default
+        startDate: new Date().toISOString().split('T')[0],
         dueDate: "",
         endDate: "",
         timeSpent: "",
       };
       setEditFormData({
         ...editFormData,
-        // Ensure subtasks is treated as an array
-        subtasks: [...(editFormData.subtasks || []), newSubtask], 
+        subtasks: [...(editFormData.subtasks || []), newSubtask],
       });
     }
   };
-
 
   const handleEditChange = (field: keyof Task, value: any) => {
     if (editFormData) {
@@ -249,7 +238,7 @@ const ViewTaskPage: React.FC = () => {
         setMessage("Task updated successfully!");
         setEditingTaskId(null);
         setEditFormData(null);
-        handleFetch(); // Refresh the task list
+        handleFetch();
       } else {
         setMessage(data.message || "Failed to update task");
       }
@@ -289,7 +278,7 @@ const ViewTaskPage: React.FC = () => {
         Date: t.date ? t.date.split("T")[0] : "",
         "Employee ID": t.empId,
         Project: t.project || "",
-        "Subtask Name": st.title, 
+        "Subtask Name": st.title,
         "Completion %": st.completion,
         Status: st.status,
         Remarks: st.remarks || "",
@@ -324,68 +313,66 @@ const ViewTaskPage: React.FC = () => {
       alert("Failed to download all tasks");
     }
   };
-  
-  const formatDate = (dateString?: string) => 
+
+  const formatDate = (dateString?: string) =>
     dateString ? dateString.split("T")[0] : "-";
 
   return (
-    <div className="min-h-screen"> 
+    <div className="min-h-screen ">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 pt-16 sm:pt-20 md:pt-24">
-        {/* Header */}
         <div className="mt-[10%]">
-          {/* Main heading set to black */}
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl font-extrabold text-white mb-5">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-slate-800 via-blue-900 to-slate-900 bg-clip-text text-white mb-10">
             Employee Tasks Dashboard
           </h1>
         </div>
 
-        {/* Message (Already text-black) */}
         {message && (
-          <div className="bg-white border border-gray-300 text-black px-4 py-3 rounded-xl mb-6 font-semibold shadow-lg text-sm sm:text-base">
-            {message}
+          <div className="bg-white/80 backdrop-blur-sm border-l-4 border-blue-500 text-slate-800 px-6 py-4 rounded-xl mb-6 font-medium shadow-lg text-sm sm:text-base">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              {message}
+            </div>
           </div>
         )}
 
-        {/* Table Section - Desktop */}
         {tasks.length > 0 && (
           <>
-            {/* Desktop Table View */}
-            <div className="hidden lg:block bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="hidden lg:block bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Type</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Date</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Employee ID</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Project</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">%</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Status</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black">Remarks</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Start</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>Due</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><CalendarDays className="inline w-3 h-3 mr-1"/>End</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-left text-xs xl:text-sm font-bold text-black" style={{minWidth: '100px'}}><Clock className="inline w-3 h-3 mr-1"/>Time</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Subtasks</th>
-                      <th className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">Actions</th>
+                    <tr className="bg-gradient-to-r from-slate-800 to-blue-900 border-b border-slate-700">
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Type</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Date</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Employee ID</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Project</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-center text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Progress</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Status</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Remarks</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider" style={{minWidth: '120px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Start</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider" style={{minWidth: '120px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>Due</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider" style={{minWidth: '120px'}}><CalendarDays className="inline w-4 h-4 mr-1"/>End</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-left text-xs xl:text-sm font-bold text-white uppercase tracking-wider" style={{minWidth: '100px'}}><Clock className="inline w-4 h-4 mr-1"/>Time</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-center text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Subtasks</th>
+                      <th className="px-4 xl:px-6 py-4 xl:py-5 text-center text-xs xl:text-sm font-bold text-white uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Use sortedTasks instead of tasks */}
                     {sortedTasks.map((task, idx) => (
                       <React.Fragment key={task._id}>
                         {editingTaskId === task._id ? (
-                          // Edit Mode Row
-                          <tr className="bg-blue-50 border-b border-blue-200">
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
+                          <tr className="bg-blue-50/80 backdrop-blur-sm border-b border-blue-200 hover:bg-blue-100/80 transition-all duration-200">
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-blue-900">
+                              <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold">TASK</span>
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{formatDate(task.date)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-slate-800">{task.empId}</td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
                               <input
                                 type="text"
                                 value={editFormData?.project || ""}
                                 onChange={(e) => handleEditChange("project", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
@@ -393,7 +380,7 @@ const ViewTaskPage: React.FC = () => {
                                 type="number"
                                 value={editFormData?.completion || ""}
                                 onChange={(e) => handleEditChange("completion", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-center text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-center text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 min="0"
                                 max="100"
                               />
@@ -402,7 +389,7 @@ const ViewTaskPage: React.FC = () => {
                               <select
                                 value={editFormData?.status || ""}
                                 onChange={(e) => handleEditChange("status", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               >
                                 <option value="Pending">Pending</option>
                                 <option value="In Progress">In Progress</option>
@@ -414,7 +401,7 @@ const ViewTaskPage: React.FC = () => {
                                 type="text"
                                 value={editFormData?.remarks || ""}
                                 onChange={(e) => handleEditChange("remarks", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
@@ -422,7 +409,7 @@ const ViewTaskPage: React.FC = () => {
                                 type="date"
                                 value={editFormData?.startDate?.split("T")[0] || ""}
                                 onChange={(e) => handleEditChange("startDate", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
@@ -430,7 +417,7 @@ const ViewTaskPage: React.FC = () => {
                                 type="date"
                                 value={editFormData?.dueDate?.split("T")[0] || ""}
                                 onChange={(e) => handleEditChange("dueDate", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
@@ -438,7 +425,7 @@ const ViewTaskPage: React.FC = () => {
                                 type="date"
                                 value={editFormData?.endDate?.split("T")[0] || ""}
                                 onChange={(e) => handleEditChange("endDate", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4">
@@ -446,14 +433,13 @@ const ViewTaskPage: React.FC = () => {
                                 type="text"
                                 value={editFormData?.timeSpent || ""}
                                 onChange={(e) => handleEditChange("timeSpent", e.target.value)}
-                                className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 placeholder="e.g., 2h 30m"
                               />
                             </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
-                              {/* Always show toggle button if subtasks exist */}
                               {(task.subtasks && task.subtasks.length > 0) || (editFormData?.subtasks && editFormData.subtasks.length > 0) ? (
-                                <button onClick={() => toggleExpand(task._id)} className="text-black hover:text-gray-700 transition-colors">
+                                <button onClick={() => toggleExpand(task._id)} className="text-blue-700 hover:text-blue-900 transition-colors p-2 hover:bg-blue-100 rounded-lg">
                                   {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                 </button>
                               ) : "-"}
@@ -462,51 +448,58 @@ const ViewTaskPage: React.FC = () => {
                               <div className="flex gap-2 justify-center">
                                 <button
                                   onClick={saveEdit}
-                                  className="p-1 bg-green-500 text-white rounded hover:bg-green-600"
+                                  className="p-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                                   title="Save"
                                 >
                                   <Save className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={cancelEditing}
-                                  className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                  className="p-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                                   title="Cancel"
                                 >
                                   <X className="w-4 h-4" />
                                 </button>
-                                {/* ⭐ NEW: Add Subtask Button for Desktop */}
                                 <button
                                   onClick={addSubtask}
-                                  className="p-1 bg-purple-500 text-white rounded hover:bg-purple-600"
+                                  className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                                   title="Add Subtask"
                                 >
-                                  <Plus className="w-4 h-4" /> 
+                                  <Plus className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>
                           </tr>
                         ) : (
-                          // View Mode Row
-                          <tr className={`border-b border-gray-200 hover:bg-gray-50 transition ${idx % 2 === 0 ? "bg-white" : "bg-gray-100"}`}>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold text-black">Task</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-black">{task.empId}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.project || "-"}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm font-bold text-black">{task.completion || "0"}</td>
+                          <tr className={`border-b border-slate-200 hover:bg-slate-50/80 transition-all duration-200 ${idx % 2 === 0 ? "bg-white/80" : "bg-slate-50/50"}`}>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-bold">
+                              <span className="px-3 py-1 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-full text-xs font-semibold shadow-sm">TASK</span>
+                            </td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{formatDate(task.date)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm font-semibold text-slate-800">{task.empId}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{task.project || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-center text-xs xl:text-sm">
+                              <span className="font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">{task.completion || "0"}%</span>
+                            </td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm">
-                              {/* Status text set to black */}
-                              <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-black" : task.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                              <span className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${
+                                task.status === "Completed"
+                                  ? "bg-gradient-to-r from-green-400 to-green-500 text-white"
+                                  : task.status === "In Progress"
+                                  ? "bg-gradient-to-r from-amber-400 to-amber-500 text-white"
+                                  : "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-800"
+                              }`}>
                                 {task.status || "N/A"}
                               </span>
                             </td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.remarks || "-"}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.startDate)}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.dueDate)}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{formatDate(task.endDate)}</td>
-                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-black">{task.timeSpent || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-600">{task.remarks || "-"}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{formatDate(task.startDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{formatDate(task.dueDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{formatDate(task.endDate)}</td>
+                            <td className="px-4 xl:px-6 py-3 xl:py-4 text-xs xl:text-sm text-slate-700 font-medium">{task.timeSpent || "-"}</td>
                             <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
                               {task.subtasks && task.subtasks.length > 0 ? (
-                                <button onClick={() => toggleExpand(task._id)} className="text-black hover:text-gray-700 transition-colors">
+                                <button onClick={() => toggleExpand(task._id)} className="text-slate-700 hover:text-slate-900 transition-colors p-2 hover:bg-slate-100 rounded-lg">
                                   {expanded === task._id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                 </button>
                               ) : "-"}
@@ -514,7 +507,7 @@ const ViewTaskPage: React.FC = () => {
                             <td className="px-4 xl:px-6 py-3 xl:py-4 text-center">
                               <button
                                 onClick={() => startEditing(task)}
-                                className="p-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
                                 title="Edit Task"
                               >
                                 <Edit2 className="w-4 h-4" />
@@ -524,62 +517,58 @@ const ViewTaskPage: React.FC = () => {
                         )}
 
                         {expanded === task._id && editFormData?.subtasks && editingTaskId === task._id ? (
-                            // Subtask Edit View (using editFormData)
                             editFormData.subtasks.map((subtask, subIdx) => (
-                                <tr key={`${task._id}-sub-${subIdx}`} className="bg-gray-100 border-b border-gray-200">
-                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-black pl-8 xl:pl-12">Subtask</td>
-                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
-                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
-                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
-                                    
-                                    {/* Subtask Title Input */}
+                                <tr key={`${task._id}-sub-${subIdx}`} className="bg-gradient-to-r from-slate-100 to-blue-50 border-b border-slate-200">
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold pl-8 xl:pl-12">
+                                      <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full text-xs font-semibold shadow-sm">SUB</span>
+                                    </td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{formatDate(task.date)}</td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{task.empId}</td>
+                                    <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{task.project || "-"}</td>
+
                                     <td className="px-4 xl:px-6 py-2 xl:py-3" colSpan={3}>
                                         <input
                                             type="text"
                                             value={subtask.title || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "title", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
-                                    {/* Completion Input */}
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
                                         <input
                                             type="number"
                                             value={subtask.completion || 0}
                                             onChange={(e) => handleSubtaskChange(subIdx, "completion", Number(e.target.value))}
-                                            className="w-full px-2 py-1 border rounded text-xs text-center text-black" 
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-center text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                             min="0"
                                             max="100"
                                         />
                                     </td>
-                                    {/* Status Select */}
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
                                         <select
                                             value={subtask.status || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "status", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         >
                                             <option value="Pending">Pending</option>
                                             <option value="In Progress">In Progress</option>
                                             <option value="Completed">Completed</option>
                                         </select>
                                     </td>
-                                    {/* Remarks Input */}
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
                                         <input
                                             type="text"
                                             value={subtask.remarks || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "remarks", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
-                                    {/* Date Inputs */}
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
                                         <input
                                             type="date"
                                             value={subtask.startDate?.split("T")[0] || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "startDate", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
@@ -587,7 +576,7 @@ const ViewTaskPage: React.FC = () => {
                                             type="date"
                                             value={subtask.dueDate?.split("T")[0] || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "dueDate", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
@@ -595,16 +584,15 @@ const ViewTaskPage: React.FC = () => {
                                             type="date"
                                             value={subtask.endDate?.split("T")[0] || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "endDate", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black"
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
-                                    {/* Time Spent Input */}
                                     <td className="px-4 xl:px-6 py-2 xl:py-3">
                                         <input
                                             type="text"
                                             value={subtask.timeSpent || ""}
                                             onChange={(e) => handleSubtaskChange(subIdx, "timeSpent", e.target.value)}
-                                            className="w-full px-2 py-1 border rounded text-xs text-black" 
+                                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                         />
                                     </td>
                                     <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
@@ -612,28 +600,35 @@ const ViewTaskPage: React.FC = () => {
                                 </tr>
                             ))
                         ) : (
-                          // Subtask View Mode (using task.subtasks)
                           expanded === task._id && task.subtasks && task.subtasks.map((subtask, subIdx) => (
-                            <tr key={`${task._id}-sub-${subIdx}`} className="bg-gray-100 border-b border-gray-200">
-                              {/* Subtask label set to black */}
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold text-black pl-8 xl:pl-12">Subtask</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(task.date)}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.empId}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{task.project || "-"}</td>
-                              
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black font-semibold" colSpan={3}>{subtask.title}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-center text-xs xl:text-sm font-bold text-black">{subtask.completion}</td>
+                            <tr key={`${task._id}-sub-${subIdx}`} className="bg-gradient-to-r from-slate-50 to-blue-50/50 border-b border-slate-200">
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm font-bold pl-8 xl:pl-12">
+                                <span className="px-3 py-1 bg-gradient-to-r from-slate-600 to-blue-700 text-white rounded-full text-xs font-semibold shadow-sm">SUB</span>
+                              </td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{formatDate(task.date)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{task.empId}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{task.project || "-"}</td>
+
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-800 font-semibold" colSpan={3}>{subtask.title}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-center text-xs xl:text-sm">
+                                <span className="font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">{subtask.completion}%</span>
+                              </td>
                               <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm">
-                                {/* Status text set to black */}
-                                <span className={`px-2 xl:px-3 py-1 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-black" : subtask.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                                <span className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${
+                                  subtask.status === "Completed"
+                                    ? "bg-gradient-to-r from-green-400 to-green-500 text-white"
+                                    : subtask.status === "In Progress"
+                                    ? "bg-gradient-to-r from-amber-400 to-amber-500 text-white"
+                                    : "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-800"
+                                }`}>
                                   {subtask.status}
                                 </span>
                               </td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.remarks || "-"}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.startDate)}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.dueDate)}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{formatDate(subtask.endDate)}</td>
-                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-black">{subtask.timeSpent || "-"}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-600">{subtask.remarks || "-"}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{formatDate(subtask.startDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{formatDate(subtask.dueDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{formatDate(subtask.endDate)}</td>
+                              <td className="px-4 xl:px-6 py-2 xl:py-3 text-xs xl:text-sm text-slate-700">{subtask.timeSpent || "-"}</td>
                               <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
                               <td className="px-4 xl:px-6 py-2 xl:py-3"></td>
                             </tr>
@@ -646,26 +641,26 @@ const ViewTaskPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Mobile/Tablet Card View */}
             <div className="lg:hidden space-y-4">
-              {/* Use sortedTasks instead of tasks */}
               {sortedTasks.map((task, idx) => (
-                <div key={task._id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                <div key={task._id} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 overflow-hidden hover:shadow-2xl transition-all duration-300">
                   {editingTaskId === task._id ? (
-                    // Edit Mode Card
-                    <div className="bg-blue-50 p-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 p-4">
                       <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-lg text-black">Edit Task</h3>
+                        <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                          <Edit2 className="w-5 h-5 text-blue-600" />
+                          Edit Task
+                        </h3>
                         <div className="flex gap-2">
                           <button
                             onClick={saveEdit}
-                            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                            className="p-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all"
                           >
                             <Save className="w-5 h-5" />
                           </button>
                           <button
                             onClick={cancelEditing}
-                            className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                            className="p-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all"
                           >
                             <X className="w-5 h-5" />
                           </button>
@@ -674,33 +669,33 @@ const ViewTaskPage: React.FC = () => {
 
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-sm font-semibold text-black mb-1">Project</label>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Project</label>
                           <input
                             type="text"
                             value={editFormData?.project || ""}
                             onChange={(e) => handleEditChange("project", e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                           />
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-sm font-semibold text-black mb-1">Completion %</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Completion %</label>
                             <input
                               type="number"
                               value={editFormData?.completion || ""}
                               onChange={(e) => handleEditChange("completion", e.target.value)}
-                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                               min="0"
                               max="100"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-black mb-1">Status</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Status</label>
                             <select
                               value={editFormData?.status || ""}
                               onChange={(e) => handleEditChange("status", e.target.value)}
-                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             >
                               <option value="Pending">Pending</option>
                               <option value="In Progress">In Progress</option>
@@ -710,100 +705,98 @@ const ViewTaskPage: React.FC = () => {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-semibold text-black mb-1">Remarks</label>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Remarks</label>
                           <textarea
                             value={editFormData?.remarks || ""}
                             onChange={(e) => handleEditChange("remarks", e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             rows={2}
                           />
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
-                            <label className="block text-sm font-semibold text-black mb-1">Start Date</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Start Date</label>
                             <input
                               type="date"
                               value={editFormData?.startDate?.split("T")[0] || ""}
                               onChange={(e) => handleEditChange("startDate", e.target.value)}
-                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-black mb-1">Due Date</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">Due Date</label>
                             <input
                               type="date"
                               value={editFormData?.dueDate?.split("T")[0] || ""}
                               onChange={(e) => handleEditChange("dueDate", e.target.value)}
-                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-semibold text-black mb-1">End Date</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1">End Date</label>
                             <input
                               type="date"
                               value={editFormData?.endDate?.split("T")[0] || ""}
                               onChange={(e) => handleEditChange("endDate", e.target.value)}
-                              className="w-full px-3 py-2 border rounded-lg text-black" 
+                              className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-sm font-semibold text-black mb-1">Time Spent</label>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Time Spent</label>
                           <input
                             type="text"
                             value={editFormData?.timeSpent || ""}
                             onChange={(e) => handleEditChange("timeSpent", e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg text-black" 
+                            className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             placeholder="e.g., 2h 30m"
                           />
                         </div>
                       </div>
 
-                      {/* Subtasks Section for Mobile Edit */}
-                      <div className="mt-4 pt-4 border-t border-gray-300">
-                        <h4 className="font-bold text-sm mb-3 text-black flex justify-between items-center">
+                      <div className="mt-4 pt-4 border-t border-blue-300">
+                        <h4 className="font-bold text-sm mb-3 text-slate-800 flex justify-between items-center">
                             <span>Subtasks</span>
-                            {/* ⭐ NEW: Add Subtask Button for Mobile */}
                             <button
                                 onClick={addSubtask}
-                                className="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-1"
+                                className="px-3 py-1 text-xs bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 flex items-center gap-1 shadow-md hover:shadow-lg transform hover:scale-105 transition-all"
                                 title="Add Subtask"
                             >
                                 <Plus className="w-3 h-3" /> Add
                             </button>
-                        </h4> 
+                        </h4>
                         <div className="space-y-3">
                           {(editFormData?.subtasks || []).map((subtask, subIdx) => (
-                            <div key={subIdx} className="bg-white p-3 rounded-lg border border-gray-300">
+                            <div key={subIdx} className="bg-white p-3 rounded-lg border-2 border-blue-200 shadow-sm">
                               <div>
-                                <label className="block text-xs font-semibold text-black mb-1">Title</label>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
                                 <input
                                   type="text"
                                   value={subtask.title || ""}
                                   onChange={(e) => handleSubtaskChange(subIdx, "title", e.target.value)}
-                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                  className="w-full px-2 py-1 border-2 border-blue-300 rounded text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                               </div>
                               <div className="grid grid-cols-2 gap-2 mt-2">
                                 <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">Completion %</label>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Completion %</label>
                                   <input
                                     type="number"
                                     value={subtask.completion || 0}
                                     onChange={(e) => handleSubtaskChange(subIdx, "completion", Number(e.target.value))}
-                                    className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                    className="w-full px-2 py-1 border-2 border-blue-300 rounded text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                     min="0"
                                     max="100"
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">Status</label>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
                                   <select
                                     value={subtask.status || ""}
                                     onChange={(e) => handleSubtaskChange(subIdx, "status", e.target.value)}
-                                    className="w-full px-2 py-1 border rounded text-sm text-black"
+                                    className="w-full px-2 py-1 border-2 border-blue-300 rounded text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                   >
                                     <option value="Pending">Pending</option>
                                     <option value="In Progress">In Progress</option>
@@ -812,50 +805,50 @@ const ViewTaskPage: React.FC = () => {
                                 </div>
                               </div>
                               <div className="mt-2">
-                                <label className="block text-xs font-semibold text-black mb-1">Remarks</label>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Remarks</label>
                                 <input
                                   type="text"
                                   value={subtask.remarks || ""}
                                   onChange={(e) => handleSubtaskChange(subIdx, "remarks", e.target.value)}
-                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                  className="w-full px-2 py-1 border-2 border-blue-300 rounded text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                               </div>
                               <div className="grid grid-cols-3 gap-2 mt-2">
                                 <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">Start</label>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Start</label>
                                   <input
                                     type="date"
                                     value={subtask.startDate?.split("T")[0] || ""}
                                     onChange={(e) => handleSubtaskChange(subIdx, "startDate", e.target.value)}
-                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                    className="w-full px-2 py-1 border-2 border-blue-300 rounded text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">Due</label>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due</label>
                                   <input
                                     type="date"
                                     value={subtask.dueDate?.split("T")[0] || ""}
                                     onChange={(e) => handleSubtaskChange(subIdx, "dueDate", e.target.value)}
-                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                    className="w-full px-2 py-1 border-2 border-blue-300 rounded text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-semibold text-black mb-1">End</label>
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">End</label>
                                   <input
                                     type="date"
                                     value={subtask.endDate?.split("T")[0] || ""}
                                     onChange={(e) => handleSubtaskChange(subIdx, "endDate", e.target.value)}
-                                    className="w-full px-2 py-1 border rounded text-xs text-black"
+                                    className="w-full px-2 py-1 border-2 border-blue-300 rounded text-xs text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                   />
                                 </div>
                               </div>
                               <div className="mt-2">
-                                <label className="block text-xs font-semibold text-black mb-1">Time Spent</label>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">Time Spent</label>
                                 <input
                                   type="text"
                                   value={subtask.timeSpent || ""}
                                   onChange={(e) => handleSubtaskChange(subIdx, "timeSpent", e.target.value)}
-                                  className="w-full px-2 py-1 border rounded text-sm text-black" 
+                                  className="w-full px-2 py-1 border-2 border-blue-300 rounded text-sm text-slate-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                   placeholder="e.g., 1h 15m"
                                 />
                               </div>
@@ -865,23 +858,27 @@ const ViewTaskPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    // View Mode Card
                     <>
-                      <div className="bg-gray-50 p-3 sm:p-4 border-b border-gray-200">
+                      <div className="bg-gradient-to-r from-slate-800 to-blue-900 p-3 sm:p-4 border-b border-slate-700">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="inline-block px-2 sm:px-3 py-1 bg-black text-white text-xs font-bold rounded-full mb-2">TASK</span>
-                            <h3 className="font-bold text-black text-sm sm:text-base">Project: {task.project || "N/A"}</h3>
-                            <p className="text-xs sm:text-sm text-black mt-1">Emp ID: {task.empId}</p>
+                            <span className="inline-block px-3 py-1 bg-white text-slate-800 text-xs font-bold rounded-full mb-2 shadow-sm">TASK</span>
+                            <h3 className="font-bold text-white text-sm sm:text-base">{task.project || "N/A"}</h3>
+                            <p className="text-xs sm:text-sm text-blue-100 mt-1">Emp ID: {task.empId}</p>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            {/* Status text set to black */}
-                            <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold ${task.status === "Completed" ? "bg-green-200 text-black" : task.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-bold shadow-md whitespace-nowrap ${
+                              task.status === "Completed"
+                                ? "bg-gradient-to-r from-green-400 to-green-500 text-white"
+                                : task.status === "In Progress"
+                                ? "bg-gradient-to-r from-amber-400 to-amber-500 text-white"
+                                : "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-800"
+                            }`}>
                               {task.status || "N/A"}
                             </span>
                             <button
                               onClick={() => startEditing(task)}
-                              className="p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+                              className="p-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all flex-shrink-0"
                               title="Edit Task"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -889,71 +886,76 @@ const ViewTaskPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      
-                      <div className="p-3 sm:p-4 space-y-2 text-xs sm:text-sm text-black">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div><span className="font-semibold text-black">Date:</span> {formatDate(task.date)}</div>
-                          <div><span className="font-semibold text-black">Completion:</span> <span className="font-bold text-black">{task.completion || "0"}%</span></div>
-                          <div><span className="font-semibold text-black">Time Spent:</span> {task.timeSpent || "-"}</div>
+
+                      <div className="p-3 sm:p-4 space-y-2 text-xs sm:text-sm">
+                        <div className="grid grid-cols-2 gap-2 text-slate-700">
+                          <div><span className="font-semibold text-slate-800">Date:</span> {formatDate(task.date)}</div>
+                          <div><span className="font-semibold text-slate-800">Completion:</span> <span className="font-bold text-blue-700">{task.completion || "0"}%</span></div>
+                          <div><span className="font-semibold text-slate-800">Time Spent:</span> {task.timeSpent || "-"}</div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
-                          <div className="flex items-center gap-1">
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+                          <div className="flex items-center gap-1 text-slate-700">
                             <CalendarDays className="w-3 h-3 text-green-600" />
-                            <span className="font-semibold text-black">Start:</span> {formatDate(task.startDate)}
+                            <span className="font-semibold text-slate-800">Start:</span> {formatDate(task.startDate)}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <CalendarDays className="w-3 h-3 text-yellow-600" />
-                            <span className="font-semibold text-black">Due:</span> {formatDate(task.dueDate)}
+                          <div className="flex items-center gap-1 text-slate-700">
+                            <CalendarDays className="w-3 h-3 text-amber-600" />
+                            <span className="font-semibold text-slate-800">Due:</span> {formatDate(task.dueDate)}
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 text-slate-700">
                             <CalendarDays className="w-3 h-3 text-red-600" />
-                            <span className="font-semibold text-black">End:</span> {formatDate(task.endDate)}
+                            <span className="font-semibold text-slate-800">End:</span> {formatDate(task.endDate)}
                           </div>
                         </div>
-                        
+
                         {task.remarks && (
-                          <div className="pt-2 border-t border-gray-200">
-                            <span className="font-semibold text-black">Remarks:</span>
-                            <p className="text-black mt-1">{task.remarks}</p>
+                          <div className="pt-2 border-t border-slate-200">
+                            <span className="font-semibold text-slate-800">Remarks:</span>
+                            <p className="text-slate-700 mt-1">{task.remarks}</p>
                           </div>
                         )}
                       </div>
 
                       {task.subtasks && task.subtasks.length > 0 && (
-                        <div className="border-t border-gray-200">
+                        <div className="border-t border-slate-200">
                           <button
                             onClick={() => toggleExpand(task._id)}
-                            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 hover:bg-gray-100 transition-all flex items-center justify-between font-semibold text-black text-xs sm:text-sm"
+                            className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-slate-50 to-blue-50 hover:from-slate-100 hover:to-blue-100 transition-all flex items-center justify-between font-semibold text-slate-800 text-xs sm:text-sm shadow-inner"
                           >
                             <span>Subtasks ({task.subtasks.length})</span>
                             {expanded === task._id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </button>
-                          
+
                           {expanded === task._id && (
-                            <div className="bg-white p-3 sm:p-4 space-y-3">
+                            <div className="bg-slate-50 p-3 sm:p-4 space-y-3">
                               {task.subtasks.map((subtask, subIdx) => (
-                                <div key={`${task._id}-sub-${subIdx}`} className="bg-gray-50 rounded-lg p-3 shadow-md border border-gray-200">
+                                <div key={`${task._id}-sub-${subIdx}`} className="bg-white rounded-xl p-3 shadow-md border border-slate-200 hover:shadow-lg transition-all">
                                   <div className="flex justify-between items-start mb-2">
-                                    <h4 className="font-semibold text-black text-xs sm:text-sm">{subtask.title}</h4>
-                                    {/* Status text set to black */}
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${subtask.status === "Completed" ? "bg-green-200 text-black" : subtask.status === "In Progress" ? "bg-yellow-200 text-black" : "bg-gray-200 text-black"}`}>
+                                    <h4 className="font-semibold text-slate-800 text-xs sm:text-sm">{subtask.title}</h4>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold shadow-sm ${
+                                      subtask.status === "Completed"
+                                        ? "bg-gradient-to-r from-green-400 to-green-500 text-white"
+                                        : subtask.status === "In Progress"
+                                        ? "bg-gradient-to-r from-amber-400 to-amber-500 text-white"
+                                        : "bg-gradient-to-r from-slate-300 to-slate-400 text-slate-800"
+                                    }`}>
                                       {subtask.status}
                                     </span>
                                   </div>
-                                  
-                                  <div className="grid grid-cols-2 gap-2 text-xs text-black">
-                                    <div><span className="font-semibold text-black">Completion:</span> <span className="font-bold text-black">{subtask.completion}%</span></div>
-                                    <div><span className="font-semibold text-black">Time:</span> {subtask.timeSpent || "-"}</div>
+
+                                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                                    <div><span className="font-semibold text-slate-800">Completion:</span> <span className="font-bold text-blue-700">{subtask.completion}%</span></div>
+                                    <div><span className="font-semibold text-slate-800">Time:</span> {subtask.timeSpent || "-"}</div>
                                   </div>
-                                  
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2 text-xs text-black">
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2 text-xs text-slate-700">
                                     <div className="flex items-center gap-1">
                                       <CalendarDays className="w-3 h-3 text-green-600" />
                                       <span className="font-semibold">Start:</span> {formatDate(subtask.startDate)}
                                     </div>
                                     <div className="flex items-center gap-1">
-                                      <CalendarDays className="w-3 h-3 text-yellow-600" />
+                                      <CalendarDays className="w-3 h-3 text-amber-600" />
                                       <span className="font-semibold">Due:</span> {formatDate(subtask.dueDate)}
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -961,11 +963,11 @@ const ViewTaskPage: React.FC = () => {
                                       <span className="font-semibold">End:</span> {formatDate(subtask.endDate)}
                                     </div>
                                   </div>
-                                  
+
                                   {subtask.remarks && (
-                                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-black">
-                                      <span className="font-semibold text-black">Remarks:</span>
-                                      <p className="text-black mt-1">{subtask.remarks}</p>
+                                    <div className="mt-2 pt-2 border-t border-slate-200 text-xs">
+                                      <span className="font-semibold text-slate-800">Remarks:</span>
+                                      <p className="text-slate-700 mt-1">{subtask.remarks}</p>
                                     </div>
                                   )}
                                 </div>

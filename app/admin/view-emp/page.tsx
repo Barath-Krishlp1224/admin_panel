@@ -1,9 +1,8 @@
-// app/admin/view-emp/page.tsx
+"use client";
 
-"use client"
-import React, { useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Define the shape of the employee data
 interface IEmployee {
   _id: string;
   empId: string;
@@ -12,6 +11,8 @@ interface IEmployee {
   dateOfBirth: string;
   joiningDate: string;
   team: string;
+  category?: string;      // ✅ add category
+  subCategory?: string;   // ✅ add subCategory
   department: string;
   phoneNumber: string;
   mailId: string;
@@ -20,307 +21,311 @@ interface IEmployee {
   photo?: string;
 }
 
-// The main Employee List/Search/Print Component
-const EmployeeListPage: React.FC = () => {
-  const [searchId, setSearchId] = useState("");
-  const [employee, setEmployee] = useState<IEmployee | null>(null);
+const teams = ["Tech", "Accounts", "HR", "Admin & Operations"];
+
+const techCategories = [
+  {
+    name: "Developer",
+    children: ["Frontend", "Backend", "Full Stack"], // Corrected to match form structure
+  },
+  { name: "IT Admin" }, // Corrected to match form structure
+  { name: "DevOps" },
+  { name: "Tester" },
+  { name: "Designer" },
+  { name: "Team Leads" }, // Corrected to match form structure
+];
+
+export default function ViewEmpPage() {
+  const [employees, setEmployees] = useState<IEmployee[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<IEmployee | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  const departments = [
-    'Accountant', 'Senior Full Stack Developer', 'Junior Full Stack Developer', 
-    'Hybrid Mobile Developer', 'Product Manager', 'Project Manager', 
-    'QA Engineer – Manual & Automation', 'Social Media Manager & Content Writer', 
-    'UI/UX Developer', 'IT Administrator', 'Customer Success Associate'
-  ];
-
-  // Search Function
-  const handleSearch = useCallback(async (idToSearch: string) => {
-    if (!idToSearch) {
-      setError("Please enter an Employee ID");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setEmployee(null);
-
-    try {
-      const res = await fetch(`/api/employees/get/${idToSearch.toUpperCase()}`);
-      const data = await res.json();
-
-      if (data.success) {
-        setEmployee(data.employee);
-      } else {
-        setError(data.message || "Employee not found");
+  // Fetch employees
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/employees/get/all");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.employees)) {
+          setEmployees(data.employees);
+        } else {
+          console.warn("Invalid employee data:", data);
+        }
+      } catch (error) {
+        console.error("Error fetching employees:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-      setError("Error fetching employee");
-    }
+    };
 
-    setLoading(false);
+    fetchEmployees();
   }, []);
 
-  // Print Handler
-  const handlePrint = () => {
-    window.print();
-  };
+// ⚠️ CORRECTED FILTERING LOGIC
+const filteredEmployees = employees.filter((emp) => {
+  if (!selectedTeam) return false;
 
-  const RenderEmployeeDetails = () => (
-    <div className="border-t border-gray-100 pt-4 sm:pt-6 md:pt-8 print-area">
+  const team = emp.team?.trim().toLowerCase();
+  const category = emp.category?.trim().toLowerCase() || "";
+  // SubCategory is "" in the DB for non-Developers
+  const subCategory = emp.subCategory?.trim().toLowerCase() || ""; 
+  const selected = selectedTeam.trim().toLowerCase();
+
+  // 1. NON-TECH TEAMS: Simple team match
+  if (selected !== "tech") {
+    return team === selected;
+  }
+
+  // 2. TECH TEAM LOGIC
+  if (selected === "tech") {
+    // If we're in Tech but haven't selected a category, don't show anyone
+    if (!selectedCategory) return false; 
+    
+    const selCat = selectedCategory.toLowerCase();
+
+    // Check if the employee's category matches the selected one
+    if (category === selCat) {
       
-      {/* Employee name visible during print */}
-      <h3 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6 sm:mb-8 hidden print:block">
-        {employee?.name} Details
-      </h3>
-      
-      <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
+      // A) Developer Category (3-Tier structure)
+      if (selCat === "developer") {
         
-        {/* Photo Section */}
-        {employee?.photo && (
-          <div className="flex-shrink-0 flex justify-center lg:justify-start">
-            <div className="relative group">
-              <div className="absolute -inset-1 rounded-xl blur opacity-25 group-hover:opacity-40 transition duration-300"></div>
-              <img 
-                src={employee.photo} 
-                alt="Employee Photo" 
-                className="relative w-32 h-32 xs:w-40 xs:h-40 sm:w-48 sm:h-48 object-cover rounded-full shadow-2xl border-4 border-white" 
-              />
+        // If 'Developer' is selected, we MUST have a sub-category selected from the UI
+        if (!selectedSubCategory) return false; 
+        
+        // Match the subCategory from the UI against the employee's subCategory field
+        return subCategory === selectedSubCategory.toLowerCase();
+      } 
+      
+      // B) Other Tech Categories (2-Tier structure: e.g., DevOps, IT Admin)
+      else {
+        // For these single-tier categories:
+        // 1. Ensure no subCategory is selected in the UI (since the list should appear directly).
+        // 2. Ensure the employee's subCategory field is empty (as saved by the backend).
+        return !selectedSubCategory && subCategory === ""; 
+      }
+    }
+  }
+
+  return false;
+});
+// ⚠️ END CORRECTED FILTERING LOGIC
+
+  // --- Print Function ---
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 text-white py-10 px-5">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-4xl font-bold text-center mb-10">Employee Directory</h1>
+
+        {/* Step 1: Team Selection */}
+        {!selectedTeam && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            {teams.map((team) => (
+              <motion.div
+                key={team}
+                whileHover={{ scale: 1.05 }}
+                onClick={() => setSelectedTeam(team)}
+                className="bg-white/10 border border-white/20 p-6 rounded-2xl cursor-pointer text-center hover:bg-white/20 transition-all duration-300 shadow-xl"
+              >
+                <h2 className="text-xl font-semibold">{team}</h2>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Step 2: Tech Category Selection */}
+        {selectedTeam === "Tech" && !selectedCategory && !selectedEmployee && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold">Tech Teams</h2>
+              <button
+                onClick={() => setSelectedTeam(null)}
+                className="bg-gray-700 px-4 py-2 rounded-lg hover:bg-gray-600 transition"
+              >
+                ← Back
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {techCategories.map((cat) => (
+                <motion.div
+                  key={cat.name}
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-white/10 border border-white/20 p-6 rounded-2xl shadow-xl"
+                >
+                  <h3
+                    // If no children, click selects the category and proceeds to employee list
+                    onClick={() => !cat.children && setSelectedCategory(cat.name)}
+                    className={`text-xl font-semibold text-center ${
+                      cat.children ? "mb-4" : "cursor-pointer hover:text-blue-400"
+                    }`}
+                  >
+                    {cat.name}
+                  </h3>
+
+                  {cat.children && (
+                    <div className="flex flex-col gap-3">
+                      {cat.children.map((child) => (
+                        <motion.div
+                          key={child}
+                          whileHover={{ scale: 1.03 }}
+                          onClick={() => {
+                            setSelectedCategory(cat.name);
+                            setSelectedSubCategory(child);
+                          }}
+                          className="bg-white/5 border border-white/10 rounded-xl text-center py-3 cursor-pointer hover:bg-white/20 transition-all duration-300"
+                        >
+                          {child}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ))}
             </div>
           </div>
         )}
-        
-        {/* Details Section with Card Layout */}
-        <div className="flex-grow">
-          {/* Employee Name Header (visible when not printing) */}
-          <div className="w-full mb-6 sm:mb-8 print:hidden">
-            <h3 className="text-2xl sm:text-3xl md:text-3xl font-bold text-gray-800 break-words">
-                {employee?.name}
-            </h3>
-            <div className="border-b border-gray-100 mt-3"></div>
-          </div>
-        
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 md:gap-6">
-            
-            {/* Employee ID */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-                Employee ID
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-words">{employee?.empId}</p>
-            </div>
 
-            {/* Father's Name */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-                Father's Name
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-words">{employee?.fatherName}</p>
-            </div>
-
-            {/* Date of Birth */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                Date of Birth
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold">{employee?.dateOfBirth}</p>
-            </div>
-
-            {/* Joining Date */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                Joining Date
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold">{employee?.joiningDate}</p>
-            </div>
-
-            {/* Team */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                </svg>
-                Team
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-words">{employee?.team}</p>
-            </div>
-
-            {/* Department */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
-                  <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z" />
-                </svg>
-                Department
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-words">{employee?.department}</p>
-            </div>
-
-            {/* Phone Number */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                </svg>
-                Phone Number
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold">{employee?.phoneNumber}</p>
-            </div>
-
-            {/* Email */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                  <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                </svg>
-                Email
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-all">{employee?.mailId}</p>
-            </div>
-
-            {/* Account Number */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
-                  <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
-                </svg>
-                Account Number
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold break-words">{employee?.accountNumber}</p>
-            </div>
-
-            {/* IFSC Code */}
-            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                IFSC Code
-              </p>
-              <p className="text-base sm:text-lg text-gray-900 font-semibold">{employee?.ifscCode}</p>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      {/* Print Button Section */}
-      <div className="flex justify-end pt-6 sm:pt-8 md:pt-10 print:hidden">
-        <button
-          onClick={handlePrint}
-          className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold text-sm sm:text-base rounded-xl shadow-lg hover:shadow-xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105"
-        >
-          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-          </svg>
-          <span className="hidden xs:inline">Print / Download PDF</span>
-          <span className="xs:hidden">Print PDF</span>
-        </button>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen to-slate-900 py-6 sm:py-8 md:py-12 px-3 sm:px-4 md:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header Section */}
-        <div className="mb-6 sm:mb-8 print:hidden">
-          <div className="text-center mt-[15%] sm:mt-[20%] mb-6 sm:mb-8">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2 sm:mb-3 px-2">
-              Employee Search Portal
-            </h1>
-            <p className="text-gray-300 text-base sm:text-lg px-2">
-              Find and manage employee information
-            </p>
-          </div>
-        </div>
-
-        {/* Main Card */}
-        <div className="bg-white shadow-2xl rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-gray-100 backdrop-blur-sm bg-opacity-95">
-          {/* Search Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:mb-8 print:hidden">
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
-                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+        {/* Step 3: Employees Display */}
+        {selectedTeam &&
+          (selectedTeam !== "Tech" || selectedCategory) &&
+          !selectedEmployee && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">
+                  {selectedTeam === "Tech"
+                    ? `${selectedSubCategory || selectedCategory} (${filteredEmployees.length})`
+                    : `${selectedTeam} Team (${filteredEmployees.length})`}
+                </h2>
+                <button
+                  onClick={() => {
+                    if (selectedTeam !== "Tech") {
+                        setSelectedTeam(null);
+                    } else if (selectedSubCategory) {
+                        // Go from SubCategory list back to Category selection
+                        setSelectedSubCategory(null);
+                    } else if (selectedCategory) {
+                        // Go from Category list back to Tech team selection (or team selection if category is an entry point)
+                        const categoryHasChildren = techCategories.find(c => c.name === selectedCategory)?.children;
+                        if (categoryHasChildren) {
+                             setSelectedCategory(null); // Back to category selection for developers
+                        } else {
+                            // Back to Tech team selection for non-developers (DevOps, IT Admin, etc.)
+                            setSelectedCategory(null); 
+                        }
+                    } else {
+                        setSelectedTeam(null);
+                    }
+                  }}
+                  className="bg-gray-700 px-4 py-2 rounded-lg hover:bg-gray-600 transition"
+                >
+                  ← Back
+                </button>
               </div>
-              <input
-                type="text"
-                placeholder="Enter Employee ID..."
-                value={searchId}
-                onChange={(e) => setSearchId(e.target.value)}
-                className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 border-2 border-gray-200 rounded-xl text-sm sm:text-base text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all duration-300 bg-gray-50 hover:bg-white"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearch(searchId);
-                }}
-              />
-            </div>
-         <button
-    onClick={() => handleSearch(searchId)}
-    className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-lime-600 to-green-600 text-white font-semibold text-sm sm:text-base rounded-xl hover:from-lime-700 hover:to-green-700 transition-all duration-300 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none flex items-center justify-center gap-2"
-    disabled={loading}
->
-    {loading && !employee ? (
-        <>
-            <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Searching...
-        </>
-    ) : (
-        <>
-            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Search
-        </>
-    )}
-</button>
-          </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 sm:mb-6 p-4 sm:p-5 bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-red-500 rounded-lg print:hidden shadow-sm">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <p className="text-red-700 text-sm sm:text-base font-semibold">{error}</p>
-              </div>
+              {loading ? (
+                <p className="text-center text-gray-400">Loading employees...</p>
+              ) : filteredEmployees.length === 0 ? (
+                <p className="text-center text-gray-400">No employees found.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                  {filteredEmployees.map((emp) => (
+                    <motion.div
+                      key={emp._id}
+                      whileHover={{ scale: 1.03 }}
+                      onClick={() => setSelectedEmployee(emp)}
+                      className="bg-white/10 border border-white/20 p-5 rounded-xl cursor-pointer hover:bg-white/20 transition-all duration-300 shadow-lg"
+                    >
+                      <div className="flex flex-col items-center text-center">
+                        <img
+                          src={emp.photo || "/default-avatar.png"}
+                          alt={emp.name}
+                          className="w-20 h-20 object-cover rounded-full mb-3 border-2 border-white/30"
+                        />
+                        <p className="text-lg font-semibold">{emp.name}</p>
+                        <p className="text-sm text-gray-300">{emp.empId}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Employee Details */}
-          {employee && <RenderEmployeeDetails />}
-        </div>
+        {/* Step 4: Employee Detail Popup */}
+        <AnimatePresence>
+          {selectedEmployee && (
+            <motion.div
+              className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-white text-gray-900 rounded-2xl max-w-2xl w-full p-6 sm:p-8 relative"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                <button
+                  onClick={() => setSelectedEmployee(null)}
+                  className="absolute top-3 right-3 text-gray-600 hover:text-red-500 text-lg"
+                >
+                  ✕
+                </button>
+
+                <div className="flex flex-col items-center mb-6">
+                  <img
+                    src={selectedEmployee.photo || "/default-avatar.png"}
+                    alt={selectedEmployee.name}
+                    className="w-32 h-32 object-cover rounded-full mb-4 border-4 border-gray-200"
+                  />
+                  <h3 className="text-2xl font-bold">{selectedEmployee.name}</h3>
+                  <p className="text-gray-600">{selectedEmployee.empId}</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Info label="Father's Name" value={selectedEmployee.fatherName} />
+                  <Info label="Date of Birth" value={selectedEmployee.dateOfBirth} />
+                  <Info label="Joining Date" value={selectedEmployee.joiningDate} />
+                  <Info label="Department" value={selectedEmployee.department} />
+                  <Info label="Category" value={selectedEmployee.category} />
+                  {/* Hide Sub Category if it's empty in the DB */}
+                  {(selectedEmployee.subCategory && selectedEmployee.subCategory !== "N/A") && (
+                    <Info label="Sub Category" value={selectedEmployee.subCategory} />
+                  )}
+                  <Info label="Phone" value={selectedEmployee.phoneNumber} />
+                  <Info label="Email" value={selectedEmployee.mailId} />
+                  <Info label="Account No." value={selectedEmployee.accountNumber} />
+                  <Info label="IFSC Code" value={selectedEmployee.ifscCode} />
+                </div>
+
+                <div className="mt-8 text-center">
+                  <button
+                    onClick={handlePrint}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300"
+                  >
+                    🖨️ Print / Download PDF
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
-};
-
-// Next.js App Router Page component
-const page = () => {
-  return (
-    <EmployeeListPage />
-  )
 }
 
-export default page;
+// Reusable Info Component
+const Info = ({ label, value }: { label: string; value?: string }) => (
+  <div className="bg-gray-100 rounded-xl p-4">
+    <p className="text-xs text-gray-500 font-semibold uppercase">{label}</p>
+    <p className="text-gray-900 font-medium">{value || "—"}</p>
+  </div>
+);

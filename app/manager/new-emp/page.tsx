@@ -1,372 +1,541 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useFormik } from 'formik';
-import * as Yup from 'yup';
+import React, { useState, useEffect } from "react";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
+// --- Hierarchical Data Structure Type ---
+type DepartmentMap = string[];
+type SubCategoryMap = { [key: string]: DepartmentMap };
+type CategoryMap = { [key: string]: DepartmentMap | SubCategoryMap };
+type Structure = { [team: string]: CategoryMap };
+
+// --- Formik Values Interface ---
+interface IFormValues {
+  empId: string;
+  name: string;
+  fatherName: string;
+  dateOfBirth: string;
+  joiningDate: string;
+  team: keyof Structure | "";
+  category: string;
+  subCategory: string;
+  department: string;
+  photo: File | null;
+  phoneNumber: string;
+  mailId: string;
+  accountNumber: string;
+  ifscCode: string;
+}
+
+// --- Base Field Props ---
+interface BaseFieldProps {
+  label: string;
+  name: keyof IFormValues;
+  value: string;
+  error?: string;
+  touched?: boolean;
+  getInputClass: (field: keyof IFormValues) => string;
+}
+
+interface InputFieldProps extends BaseFieldProps {
+  type: string;
+  placeholder?: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+interface SelectFieldProps extends BaseFieldProps {
+  options: string[];
+  disabled?: boolean;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+}
+
+// --- Reusable Input Component ---
+const InputField: React.FC<InputFieldProps> = ({
+  label,
+  name,
+  type,
+  placeholder,
+  value,
+  onChange,
+  error,
+  touched,
+  getInputClass,
+}) => (
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 mb-2">
+      {label} *
+    </label>
+    <input
+      type={type}
+      name={name}
+      placeholder={placeholder}
+      value={value || ""}
+      onChange={onChange}
+      className={getInputClass(name)}
+    />
+    {touched && error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+  </div>
+);
+
+// --- Reusable Select Component ---
+const SelectField: React.FC<SelectFieldProps> = ({
+  label,
+  name,
+  options,
+  value,
+  onChange,
+  error,
+  touched,
+  getInputClass,
+  disabled,
+}) => (
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 mb-2">
+      {label} *
+    </label>
+    <select
+      name={name}
+      value={value || ""}
+      onChange={onChange}
+      className={getInputClass(name)}
+      disabled={disabled}
+    >
+      <option value="">Select {label}</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+    {touched && error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+  </div>
+);
+
+// --- Main Component ---
 const AddEmployeePage: React.FC = () => {
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [subCategoryOptions, setSubCategoryOptions] = useState<string[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<string[]>([]);
 
-  // Correctly define all teams and their specific departments
-  const allDepartments: { [key: string]: string[] } = {
-    Tech: [
-      'Senior Full Stack Developer',
-      'Junior Full Stack Developer',
-      'Hybrid Mobile Developer',
-      'Product Manager',
-      'Project Manager',
-      'QA Engineer – Manual & Automation',
-      'Social Media Manager & Content Writer',
-      'UI/UX Developer',
-      'IT Administrator',
-    ],
-    Accounts: ['Accountant', 'Senior Accountant'],
-    'Admin & Operations': ['Admin & Operations'], // Team 'Admin & Operations' maps to Department 'Admin & Operations'
-    HR: ['HR'], // Team 'HR' maps to Department 'HR'
+  // --- Hierarchical Data Structure (UPDATED) ---
+  const structure: Structure = {
+    Tech: {
+      Developer: {
+        Frontend: ["Junior Frontend Developer", "Senior Frontend Developer"],
+        Backend: ["Junior Backend Developer", "Senior Backend Developer"],
+        "Full Stack": [
+          "Junior Full Stack Developer",
+          "Senior Full Stack Developer",
+        ],
+        "UI/UX Developer": ["UI/UX Developer"],
+      },
+      // ✅ NEW: IT Admin category with Department array
+      "IT Admin": ["IT Administrator"],
+      // ⚠️ UPDATED: DevOps list (removed IT Administrator)
+      DevOps: ["Product Manager"], 
+      Tester: ["QA Engineer – Manual & Automation"],
+      Designer: ["UI/UX Designer"],
+      "Team Leads": ["Project Manager"],
+    },
+    Accounts: {
+      Accountant: ["Accountant", "Senior Accountant"],
+    },
+    "Admin & Operations": {
+      "Admin & Operations": ["Admin & Operations"],
+    },
+    HR: {
+      HR: ["HR Executive", "HR Manager"],
+    },
   };
-  
 
+  // --- Validation Schema ---
   const validationSchema = Yup.object({
     empId: Yup.string()
-      .matches(/^[A-Z0-9]+$/, 'Employee ID must contain only uppercase letters and numbers')
-      .required('Employee ID is required'),
+      .matches(
+        /^[A-Z0-9]+$/,
+        "Employee ID must contain only uppercase letters and numbers"
+      )
+      .required("Employee ID is required"),
     name: Yup.string()
-      .matches(/^[A-Z][a-zA-Z\s]*$/, 'Name must start with a capital letter')
-      .required('Name is required'),
+      .matches(/^[A-Z][a-zA-Z\s]*$/, "Name must start with a capital letter")
+      .required("Name is required"),
     fatherName: Yup.string()
-      .matches(/^[A-Z][a-zA-Z\s]*$/, "Father's name must start with a capital letter")
+      .matches(
+        /^[A-Z][a-zA-Z\s]*$/,
+        "Father's name must start with a capital letter"
+      )
       .required("Father's name is required"),
-    dateOfBirth: Yup.date()
-      .max(new Date(new Date().setFullYear(new Date().getFullYear() - 18)), 'Employee must be at least 18 years old')
-      .required('Date of birth is required'),
-    joiningDate: Yup.date()
-      .required('Joining date is required'),
-    team: Yup.string().required('Team is required'),
-    department: Yup.string().required('Department is required'),
-    photo: Yup.mixed()
-      .test('fileFormat', 'Only PNG, JPEG, and JPG formats are allowed', (value) => {
-        if (!value) return true;
-        const file = value as File;
-        return ['image/png', 'image/jpeg', 'image/jpg'].includes(file.type);
-      }),
+    dateOfBirth: Yup.string().required("Date of birth is required"),
+    joiningDate: Yup.string().required("Joining date is required"),
+    team: Yup.string().required("Team is required"),
+    category: Yup.string().required("Category is required"),
+    subCategory: Yup.string().required("Sub-category is required"),
+    department: Yup.string().required("Department is required"),
     phoneNumber: Yup.string()
-      .matches(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
-      .required('Phone number is required'),
-    mailId: Yup.string().email('Invalid email address').required('Email is required'),
+      .matches(/^[0-9]{10}$/, "Phone number must be exactly 10 digits")
+      .required("Phone number is required"),
+    mailId: Yup.string().email("Invalid email").required("Email is required"),
     accountNumber: Yup.string()
-      .matches(/^[0-9]{9,18}$/, 'Account number must be between 9-18 digits')
-      .required('Account number is required'),
+      .matches(/^[0-9]{9,18}$/, "Account number must be between 9-18 digits")
+      .required("Account number is required"),
     ifscCode: Yup.string()
-      .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code format (e.g., SBIN0001234)')
-      .required('IFSC code is required')
+      .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC code (e.g., SBIN0001234)")
+      .required("IFSC code is required"),
+    photo: Yup.mixed<File>()
+      .nullable()
+      .test("fileFormat", "Only PNG, JPEG, JPG allowed", (value) => {
+        if (!value) return true;
+        return ["image/png", "image/jpeg", "image/jpg"].includes(value.type);
+      }),
   });
 
-  const formik = useFormik({
+  // --- Formik Setup ---
+  const formik = useFormik<IFormValues>({
     initialValues: {
-      empId: '',
-      name: '',
-      fatherName: '',
-      dateOfBirth: '',
-      joiningDate: '',
-      team: '',
-      department: '',
-      photo: null as File | null,
-      phoneNumber: '',
-      mailId: '',
-      accountNumber: '',
-      ifscCode: ''
+      empId: "",
+      name: "",
+      fatherName: "",
+      dateOfBirth: "",
+      joiningDate: "",
+      team: "",
+      category: "",
+      subCategory: "",
+      department: "",
+      photo: null,
+      phoneNumber: "",
+      mailId: "",
+      accountNumber: "",
+      ifscCode: "",
     },
     validationSchema,
     onSubmit: async (values) => {
       const data = new FormData();
       Object.entries(values).forEach(([key, value]) => {
-        if (value !== null && value !== '') {
-          if (key === 'empId' || key === 'ifscCode') data.append(key, (value as string).toUpperCase());
-          else data.append(key, value as string | Blob);
+        if (value !== null && value !== "") {
+          if (key === "photo" && value instanceof File) {
+            data.append(key, value);
+          } else {
+            data.append(key, value.toString());
+          }
         }
       });
 
       try {
-        const res = await fetch('/api/employees/add', {
-          method: 'POST',
-          body: data
+        // NOTE: This API endpoint is assumed. Ensure your backend route is correct.
+        const res = await fetch("/api/employees/add", {
+          method: "POST",
+          body: data,
         });
-
         const result = await res.json();
-        
+
         if (result.success) {
-            alert('Employee Added Successfully! 🎉');
-            formik.resetForm();
-            setDepartmentOptions([]); // reset department options
+          alert("✅ Employee Added Successfully!");
+          formik.resetForm();
+          setCategoryOptions([]);
+          setSubCategoryOptions([]);
+          setDepartmentOptions([]);
         } else {
-            alert(`Error: ${result.message}`);
+          alert(`❌ ${result.message}`);
         }
       } catch (error) {
-        alert('Error submitting form. Please check your network connection.');
-        console.error(error);
+        console.error("Error submitting form:", error);
+        alert("Network or server error. Please try again.");
       }
-    }
+    },
   });
 
-  // Update departments when team changes
+  // --- Cascading Dropdown Logic (Handles Team selection) ---
   useEffect(() => {
-    const selectedTeam = formik.values.team;
-    
-    // Clear the current department
-    formik.setFieldValue('department', ''); 
+    const { team } = formik.values;
+    formik.setFieldValue("category", "");
+    formik.setFieldValue("subCategory", "");
+    formik.setFieldValue("department", "");
 
-    // Look up departments based on the selected team string
-    if (allDepartments[selectedTeam]) {
-      setDepartmentOptions(allDepartments[selectedTeam]);
+    if (team && structure[team]) {
+      setCategoryOptions(Object.keys(structure[team]));
     } else {
-      setDepartmentOptions([]);
+      setCategoryOptions([]);
     }
-    
+    setSubCategoryOptions([]);
+    setDepartmentOptions([]);
   }, [formik.values.team]);
 
-  const inputBaseClass = 'w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900';
-  const getInputClass = (field: keyof typeof formik.initialValues) => {
-    return `${inputBaseClass} ${
-      formik.touched[field] && formik.errors[field] ? 'border-red-500' : 'border-gray-300'
-    }`;
-  };
+  // --- Cascading Dropdown Logic (Handles Category selection) ---
+  useEffect(() => {
+    const { team, category } = formik.values;
+    formik.setFieldValue("subCategory", "");
+    formik.setFieldValue("department", "");
 
+    if (team && category && structure[team]) {
+      const teamData = structure[team];
+      const categoryData = teamData[category];
+
+      // Handle sub-categories (currently only Tech -> Developer)
+      if (team === "Tech" && category === "Developer") {
+        setSubCategoryOptions(Object.keys(categoryData as SubCategoryMap));
+      } else {
+        setSubCategoryOptions([]);
+        // Set a non-empty value for validation when subCategory is not applicable
+        formik.setFieldValue("subCategory", "N/A"); 
+
+        // For categories without sub-categories (e.g., IT Admin, DevOps, Accounts)
+        if (Array.isArray(categoryData)) {
+          setDepartmentOptions(categoryData);
+        } else {
+          setDepartmentOptions([]);
+        }
+      }
+    } else {
+      setSubCategoryOptions([]);
+      setDepartmentOptions([]);
+    }
+  }, [formik.values.category, formik.values.team]);
+
+  // --- Cascading Dropdown Logic (Handles Sub-Category selection) ---
+  useEffect(() => {
+    const { team, category, subCategory } = formik.values;
+    formik.setFieldValue("department", "");
+
+    // Only runs for the nested structure (Tech -> Developer -> SubCategory)
+    if (team === "Tech" && category === "Developer" && subCategory) {
+      const teamData = structure[team];
+      const categoryData = teamData[category] as SubCategoryMap;
+      setDepartmentOptions(categoryData[subCategory] || []);
+    }
+  }, [formik.values.subCategory]);
+
+  // --- Input Styles ---
+  const inputBaseClass =
+    "w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-900";
+  const getInputClass = (field: keyof IFormValues) =>
+    `${inputBaseClass} ${
+      formik.touched[field] && formik.errors[field]
+        ? "border-red-500"
+        : "border-gray-300"
+    }`;
+
+  // --- UI ---
   return (
-    <div className="min-h-screen py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen py-12 px-4 bg-gray-50">
+      <div className="max-w-5xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-white px-8 py-6">
-            <h2 className="text-3xl font-bold text-black">Add New Employee</h2>
-            <p className="text-black mt-2">Fill in the details to register a new employee</p>
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 text-white">
+            <h2 className="text-3xl font-bold">Add New Employee</h2>
+            <p className="text-sm opacity-90">
+              Fill in the details to register a new employee
+            </p>
           </div>
 
-          <form className="p-8" onSubmit={formik.handleSubmit} encType="multipart/form-data">
+          <form
+            className="p-8"
+            onSubmit={formik.handleSubmit}
+            encType="multipart/form-data"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Employee ID */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Employee ID *</label>
-                <input
-                  type="text"
-                  name="empId"
-                  placeholder="e.g., LP012" // Added Placeholder
-                  value={formik.values.empId}
-                  onChange={(e) => formik.setFieldValue('empId', e.target.value.toUpperCase())}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('empId')}
-                />
-                {formik.touched.empId && formik.errors.empId && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.empId}</p>
-                )}
-              </div>
+              {/* Basic Info */}
+              <InputField
+                label="Employee ID"
+                name="empId"
+                type="text"
+                placeholder="e.g., LP012"
+                value={formik.values.empId}
+                onChange={(e) =>
+                  formik.setFieldValue("empId", e.target.value.toUpperCase())
+                }
+                error={formik.errors.empId}
+                touched={formik.touched.empId}
+                getInputClass={getInputClass}
+              />
 
-              {/* Full Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="e.g., John Doe" // Added Placeholder
-                  value={formik.values.name}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('name')}
-                />
-                {formik.touched.name && formik.errors.name && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.name}</p>
-                )}
-              </div>
-              
-              {/* Father's Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Father's Name *</label>
-                <input
-                  type="text"
-                  name="fatherName"
-                  placeholder="e.g., Michael Doe" // Added Placeholder
-                  value={formik.values.fatherName}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('fatherName')}
-                />
-                {formik.touched.fatherName && formik.errors.fatherName && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.fatherName}</p>
-                )}
-              </div>
+              <InputField
+                label="Full Name"
+                name="name"
+                type="text"
+                placeholder="e.g., John Doe"
+                value={formik.values.name}
+                onChange={formik.handleChange}
+                error={formik.errors.name}
+                touched={formik.touched.name}
+                getInputClass={getInputClass}
+              />
 
-              {/* Date of Birth (Type date doesn't typically need a placeholder, but keeping the field structure) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Date of Birth *</label>
-                <input
-                  type="date"
-                  name="dateOfBirth"
-                  value={formik.values.dateOfBirth}
+              <InputField
+                label="Father's Name"
+                name="fatherName"
+                type="text"
+                placeholder="e.g., Michael Doe"
+                value={formik.values.fatherName}
+                onChange={formik.handleChange}
+                error={formik.errors.fatherName}
+                touched={formik.touched.fatherName}
+                getInputClass={getInputClass}
+              />
+
+              <InputField
+                label="Date of Birth"
+                name="dateOfBirth"
+                type="date"
+                value={formik.values.dateOfBirth}
+                onChange={formik.handleChange}
+                error={formik.errors.dateOfBirth}
+                touched={formik.touched.dateOfBirth}
+                getInputClass={getInputClass}
+              />
+
+              <InputField
+                label="Joining Date"
+                name="joiningDate"
+                type="date"
+                value={formik.values.joiningDate}
+                onChange={formik.handleChange}
+                error={formik.errors.joiningDate}
+                touched={formik.touched.joiningDate}
+                getInputClass={getInputClass}
+              />
+
+              {/* Dropdowns */}
+              <SelectField
+                label="Team"
+                name="team"
+                options={Object.keys(structure)}
+                value={formik.values.team as string}
+                onChange={formik.handleChange}
+                error={formik.errors.team}
+                touched={formik.touched.team}
+                getInputClass={getInputClass}
+              />
+
+              {categoryOptions.length > 0 && (
+                <SelectField
+                  label="Category"
+                  name="category"
+                  options={categoryOptions}
+                  value={formik.values.category}
                   onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('dateOfBirth')}
+                  error={formik.errors.category}
+                  touched={formik.touched.category}
+                  getInputClass={getInputClass}
                 />
-                {formik.touched.dateOfBirth && formik.errors.dateOfBirth && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.dateOfBirth}</p>
-                )}
-              </div>
+              )}
 
-              {/* Joining Date (Type date doesn't typically need a placeholder, but keeping the field structure) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Joining Date *</label>
-                <input
-                  type="date"
-                  name="joiningDate"
-                  value={formik.values.joiningDate}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('joiningDate')}
-                />
-                {formik.touched.joiningDate && formik.errors.joiningDate && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.joiningDate}</p>
+              {/* Show SubCategory only for Tech → Developer */}
+              {formik.values.team === "Tech" &&
+                formik.values.category === "Developer" &&
+                subCategoryOptions.length > 0 && (
+                  <SelectField
+                    label="Sub-Category"
+                    name="subCategory"
+                    options={subCategoryOptions}
+                    value={formik.values.subCategory}
+                    onChange={formik.handleChange}
+                    error={formik.errors.subCategory}
+                    touched={formik.touched.subCategory}
+                    getInputClass={getInputClass}
+                  />
                 )}
-              </div>
 
-              {/* Team (Select field, placeholders not applicable) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Team *</label>
-                <select
-                  name="team"
-                  value={formik.values.team}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('team')}
-                >
-                  <option value="">Select Team</option>
-                  <option value="Tech">Tech</option>
-                  <option value="Accounts">Accounts</option>
-                  <option value="HR">HR</option> 
-                  <option value="Admin & Operations">Admin & Operations</option> 
-                </select>
-                {formik.touched.team && formik.errors.team && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.team}</p>
-                )}
-              </div>
-
-              {/* Department (Select field, placeholders not applicable) */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Department *</label>
-                <select
+              {departmentOptions.length > 0 && (
+                <SelectField
+                  label="Department"
                   name="department"
+                  options={departmentOptions}
                   value={formik.values.department}
                   onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('department')}
-                  disabled={departmentOptions.length === 0}
-                >
-                  <option value="">Select Department</option>
-                  {departmentOptions.map((dept) => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-                {formik.touched.department && formik.errors.department && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.department}</p>
-                )}
-              </div>
+                  error={formik.errors.department}
+                  touched={formik.touched.department}
+                  getInputClass={getInputClass}
+                />
+              )}
 
-              {/* Photo (File input, placeholders not applicable) */}
+              {/* Contact Info */}
+              <InputField
+                label="Phone Number"
+                name="phoneNumber"
+                type="tel"
+                placeholder="9876543210"
+                value={formik.values.phoneNumber}
+                onChange={formik.handleChange}
+                error={formik.errors.phoneNumber}
+                touched={formik.touched.phoneNumber}
+                getInputClass={getInputClass}
+              />
+
+              <InputField
+                label="Email"
+                name="mailId"
+                type="email"
+                placeholder="john.doe@example.com"
+                value={formik.values.mailId}
+                onChange={formik.handleChange}
+                error={formik.errors.mailId}
+                touched={formik.touched.mailId}
+                getInputClass={getInputClass}
+              />
+
+              <InputField
+                label="Account Number"
+                name="accountNumber"
+                type="text"
+                placeholder="123456789012"
+                value={formik.values.accountNumber}
+                onChange={formik.handleChange}
+                error={formik.errors.accountNumber}
+                touched={formik.touched.accountNumber}
+                getInputClass={getInputClass}
+              />
+
+              <InputField
+                label="IFSC Code"
+                name="ifscCode"
+                type="text"
+                placeholder="SBIN0001234"
+                value={formik.values.ifscCode}
+                onChange={(e) =>
+                  formik.setFieldValue("ifscCode", e.target.value.toUpperCase())
+                }
+                error={formik.errors.ifscCode}
+                touched={formik.touched.ifscCode}
+                getInputClass={getInputClass}
+              />
+
+              {/* Photo Upload */}
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Employee Photo</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Employee Photo
+                </label>
                 <input
                   type="file"
                   name="photo"
-                  accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                  onChange={(e) => formik.setFieldValue('photo', e.target.files?.[0] || null)}
-                  onBlur={formik.handleBlur}
-                  className={`${inputBaseClass} ${formik.touched.photo && formik.errors.photo ? 'border-red-500' : 'border-gray-300'}`}
+                  accept=".png,.jpg,.jpeg"
+                  onChange={(e) =>
+                    formik.setFieldValue("photo", e.currentTarget.files?.[0] || null)
+                  }
+                  className={getInputClass("photo")}
                 />
                 {formik.touched.photo && formik.errors.photo && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.photo}</p>
+                  <p className="mt-1 text-sm text-red-500">
+                    {formik.errors.photo}
+                  </p>
                 )}
               </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number *</label>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  placeholder="e.g., 9876543210 (10 digits)" // Added Placeholder
-                  maxLength={10}
-                  value={formik.values.phoneNumber}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('phoneNumber')}
-                />
-                {formik.touched.phoneNumber && formik.errors.phoneNumber && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.phoneNumber}</p>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
-                <input
-                  type="email"
-                  name="mailId"
-                  placeholder="e.g., john.doe@example.com" // Added Placeholder
-                  value={formik.values.mailId}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('mailId')}
-                />
-                {formik.touched.mailId && formik.errors.mailId && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.mailId}</p>
-                )}
-              </div>
-
-              {/* Account Number */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Account Number *</label>
-                <input
-                  type="text"
-                  name="accountNumber"
-                  placeholder="e.g., 123456789012" // Added Placeholder
-                  value={formik.values.accountNumber}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('accountNumber')}
-                />
-                {formik.touched.accountNumber && formik.errors.accountNumber && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.accountNumber}</p>
-                )}
-              </div>
-
-              {/* IFSC */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">IFSC Code *</label>
-                <input
-                  type="text"
-                  name="ifscCode"
-                  placeholder="e.g., SBIN0001234 (11 characters)" // Added Placeholder
-                  maxLength={11}
-                  value={formik.values.ifscCode}
-                  onChange={(e) => formik.setFieldValue('ifscCode', e.target.value.toUpperCase())}
-                  onBlur={formik.handleBlur}
-                  className={getInputClass('ifscCode')}
-                />
-                {formik.touched.ifscCode && formik.errors.ifscCode && (
-                  <p className="mt-1 text-sm text-red-500">{formik.errors.ifscCode}</p>
-                )}
-              </div>
-
             </div>
 
+            {/* Buttons */}
             <div className="mt-8 flex gap-4">
               <button
                 type="submit"
                 disabled={formik.isSubmitting}
                 className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg"
               >
-                {formik.isSubmitting ? 'Adding Employee...' : 'Add Employee'}
+                {formik.isSubmitting ? "Adding Employee..." : "Add Employee"}
               </button>
               <button
                 type="button"
                 onClick={() => {
                   formik.resetForm();
+                  setCategoryOptions([]);
+                  setSubCategoryOptions([]);
                   setDepartmentOptions([]);
                 }}
                 className="px-6 py-3 border-2 border-gray-300 rounded-lg"

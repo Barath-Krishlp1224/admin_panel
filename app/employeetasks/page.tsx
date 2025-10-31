@@ -4,14 +4,14 @@ import React, { useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer,
 } from "recharts";
-import { Search, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Calendar, ChevronDown, ChevronUp, TrendingUp, CheckCircle2, Clock, ListChecks } from "lucide-react";
 
-// --- INTERFACES (UPDATED to match the first component) ---
+// --- INTERFACES ---
 interface Subtask {
   title: string;
   status: string;
-  completion: number; // Added completion back from the first component's model
-  remarks?: string;   // Added remarks back from the first component's model
+  completion: number;
+  remarks?: string;
   startDate?: string;
   dueDate?: string;
   endDate?: string;
@@ -20,18 +20,13 @@ interface Subtask {
 
 interface Task {
   _id: string;
-  // Kept 'date' for filtering/display legacy tasks, though it was optional in the first component
   date?: string; 
   empId: string;
-  project?: string; // Made optional
-  // ❌ Removed 'name'
-  // ❌ Removed 'plan'
-  // ❌ Removed 'done'
-  completion?: string | number; // Made optional
-  status?: string;     // Made optional
+  project?: string;
+  completion?: string | number;
+  status?: string;
   remarks?: string;
   subtasks?: Subtask[];
-
   startDate?: string;
   dueDate?: string;
   endDate?: string;
@@ -52,10 +47,7 @@ interface CompletionPieData {
   [key: string]: any;
 }
 
-// ------------------------------------------------------------------------
-
 const ViewTaskPage: React.FC = () => {
-  // 📌 UPDATED: Removed 'name' as a search criteria option
   const [searchCriteria, setSearchCriteria] = useState<"empId" | "project" | "">(""); 
   const [searchValue, setSearchValue] = useState(""); 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -64,13 +56,13 @@ const ViewTaskPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
 
-  const parseDate = (dateStr?: string) => { // Handle optional date
+  const parseDate = (dateStr?: string) => {
     if (!dateStr) return new Date(0); 
     return new Date(dateStr.split("T")[0]);
   };
 
-  const PIE_COLORS = ["#3730a3", "#1f2937"]; 
-  const SUBTASK_PIE_COLORS = ["#15803d", "#0d9488", "#6d28d9"]; 
+  const PIE_COLORS = ["#4f46e5", "#e5e7eb"]; 
+  const SUBTASK_PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b"]; 
 
   const isFetchEnabled = useMemo(() => {
     return searchCriteria.trim() !== "" && searchValue.trim() !== "";
@@ -84,9 +76,8 @@ const ViewTaskPage: React.FC = () => {
         d1.getDate() === d2.getDate();
 
     return tasks.filter((task) => {
-      // Use 'startDate' for filtering if 'date' is unavailable
       const dateToFilter = task.date || task.startDate;
-      if (!dateToFilter) return timeRange === "all"; // Assume all if no date is present
+      if (!dateToFilter) return timeRange === "all";
 
       const taskDate = parseDate(dateToFilter);
 
@@ -114,7 +105,7 @@ const ViewTaskPage: React.FC = () => {
           const yearAgo = new Date(now);
           yearAgo.setFullYear(now.getFullYear() - 1);
           return taskDate >= yearAgo && taskDate <= now;
-        case "all": // Added 'all' case for consistency
+        case "all":
         default:
           return true;
       }
@@ -132,7 +123,6 @@ const ViewTaskPage: React.FC = () => {
       const params = new URLSearchParams();
       params.append(searchCriteria, searchValue);
 
-      // Assuming this endpoint works for empId or project search
       const res = await fetch(`/api/tasks/getByEmpId?${params.toString()}`); 
       const data = await res.json();
 
@@ -155,10 +145,9 @@ const ViewTaskPage: React.FC = () => {
   const getPlaceholderText = () => {
     switch (searchCriteria) {
       case 'empId':
-        return 'Enter Emp ID';
-      // ❌ Removed 'name' case
+        return 'Enter Employee ID';
       case 'project':
-        return 'Enter Proj Name';
+        return 'Enter Project Name';
       default:
         return 'Select a search field first';
     }
@@ -168,7 +157,6 @@ const ViewTaskPage: React.FC = () => {
     const map = new Map<string, { Completed: number; "In Progress": number; Pending: number }>();
 
     tasks.forEach((task) => {
-      // Ensure task.project is present and treat it as a string
       const projectName = task.project || "Unassigned"; 
       
       if (!map.has(projectName)) {
@@ -176,7 +164,6 @@ const ViewTaskPage: React.FC = () => {
       }
       
       const counts = map.get(projectName)!;
-      // Normalizing status to one of the keys
       const status = task.status || "Pending"; 
       
       if (status === "Completed") {
@@ -200,7 +187,6 @@ const ViewTaskPage: React.FC = () => {
     let valid = 0;
 
     tasks.forEach((t) => {
-      // Safely parse completion, defaulting to 0 if not present or invalid
       const completionStr = String(t.completion || "0").replace("%", "").trim();
       const val = parseFloat(completionStr);
       
@@ -216,7 +202,7 @@ const ViewTaskPage: React.FC = () => {
     
     return [
       { name: "Average Completion", value: avgRounded },
-      { name: "Remaining", value: remainingRounded > 0 ? remainingRounded : 0 }, // Ensure remaining is not negative
+      { name: "Remaining", value: remainingRounded > 0 ? remainingRounded : 0 },
     ];
   }, [tasks]);
 
@@ -228,7 +214,7 @@ const ViewTaskPage: React.FC = () => {
     tasks.forEach((task) => {
       if (task.subtasks && task.subtasks.length > 0) {
         task.subtasks.forEach((st) => {
-          const status = st.status || "Pending"; // Default to Pending if status is missing
+          const status = st.status || "Pending";
           if (status === "Completed") completed++;
           else if (status === "In Progress") inProgress++;
           else pending++;
@@ -250,191 +236,205 @@ const ViewTaskPage: React.FC = () => {
   const totalSubtasks = subtasksStatusData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <div className="min-h-screen ">
+    <div className="min-h-screen mt-50 ">
       <div className="w-full">
-        <div className="max-w-7xl mx-auto mt-[1%] px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8 pt-16 sm:pt-20 md:pt-24 lg:pt-32">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-10 text-center lg:text-left drop-shadow-lg"> 
-            Employee Task Dashboard
-          </h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
+          {/* Header */}
+          <div className="mb-8 sm:mb-10">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 bg-clip-text text-white mb-2">
+              Employee Task Dashboard
+            </h1>
+          </div>
 
-          {/* --- Filters --- */}
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 md:mb-8 shadow-xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-end">
-              {/* === Search Criteria and Input Section === */}
-              <div className="sm:col-span-2 lg:col-span-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-2 sm:gap-3">
-                <div>
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-1.5 sm:mb-2">
-                      <Search className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Search By
-                    </label>
-                    <select
-                      value={searchCriteria}
-                      onChange={(e) => {
-                        // 📌 UPDATED: Removed 'name' as an option
-                        setSearchCriteria(e.target.value as "empId" | "project" | "");
-                        setSearchValue("");
-                      }}
-                      className="w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg text-gray-900 focus:ring-2 focus:ring-lime-500 transition-all bg-white"
-                    >
-                      <option value="" disabled>Select Field</option>
-                      <option value="empId">Employee ID</option>
-                      {/* ❌ Removed 'Employee Name' option */}
-                      <option value="project">Project Name</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-1.5 sm:mb-2">
-                      Search Value
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={getPlaceholderText()}
-                      value={searchValue}
-                      onChange={(e) => setSearchValue(e.target.value)}
-                      disabled={searchCriteria === ""}
-                      className="w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white rounded-lg text-gray-900 focus:ring-2 focus:ring-lime-500 transition-all placeholder-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
-                </div>
+          {/* Filters Section */}
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8 mb-8">
+            <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
+              <Search className="w-5 h-5 text-indigo-600" />
+              Search & Filter
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-5">
+              {/* Search Criteria */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Search By
+                </label>
+                <select
+                  value={searchCriteria}
+                  onChange={(e) => {
+                    setSearchCriteria(e.target.value as "empId" | "project" | "");
+                    setSearchValue("");
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm"
+                >
+                  <option value="" disabled>Select Field</option>
+                  <option value="empId">Employee ID</option>
+                  <option value="project">Project Name</option>
+                </select>
               </div>
 
-              {/* === Time Range Select === */}
-              <div className="sm:col-span-1">
-                <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-1.5 sm:mb-2">
-                  <Calendar className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              {/* Search Value */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Search Value
+                </label>
+                <input
+                  type="text"
+                  placeholder={getPlaceholderText()}
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  disabled={searchCriteria === ""}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder-slate-400 disabled:bg-slate-100 disabled:cursor-not-allowed text-sm"
+                />
+              </div>
+
+              {/* Time Range */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">
                   Time Range
                 </label>
                 <select
                   value={timeRange}
                   onChange={(e) => setTimeRange(e.target.value)}
-                  className="w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg text-gray-900 focus:ring-2 focus:ring-lime-500 transition-all bg-white"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm"
                 >
                   <option value="today">Today</option>
                   <option value="yesterday">Yesterday</option>
                   <option value="week">Last 7 Days</option>
-                  <option value="month">Last 1 Month</option>
-                  <option value="year">Last 1 Year</option>
+                  <option value="month">Last Month</option>
+                  <option value="year">Last Year</option>
                   <option value="all">All Time</option>
                 </select>
               </div>
 
-              {/* === Date Input === */}
-              <div className="sm:col-span-1">
-                <label className="block text-xs sm:text-sm font-semibold text-gray-800 mb-1.5 sm:mb-2">
-                  <Calendar className="inline w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Select Date
+              {/* Date Picker */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Specific Date
                 </label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg text-gray-900 focus:ring-2 focus:ring-lime-500 transition-all bg-white"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all text-sm"
                 />
               </div>
 
-              {/* === Fetch Button === */}
-           <button
-                onClick={handleFetch}
-                disabled={!isFetchEnabled}
-                className={`w-full sm:col-span-2 lg:col-span-1 font-semibold px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg shadow-lg transition-all transform hover:scale-105 ${
-                  isFetchEnabled
-                    ? "bg-gradient-to-r from-lime-600 to-green-600 hover:from-lime-700 hover:to-green-700 text-white cursor-pointer"
-                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
-              >
-                Fetch Dashboard
-              </button>
+              {/* Fetch Button */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-transparent">
+                  Action
+                </label>
+                <button
+                  onClick={handleFetch}
+                  disabled={!isFetchEnabled}
+                  className={`w-full h-[42px] font-semibold rounded-lg shadow-md transition-all transform active:scale-95 text-sm ${
+                    isFetchEnabled
+                      ? "bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-200"
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  }`}
+                >
+                  Fetch Dashboard
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* --- Message --- */}
+          {/* Message */}
           {message && (
-            <div className="bg-yellow-100 text-gray-900 px-3 sm:px-4 py-2 sm:py-3 rounded-lg mb-4 sm:mb-6 font-medium text-sm sm:text-base shadow-md"> 
-              {message}
+            <div className="bg-amber-50 border-l-4 border-amber-400 text-amber-800 px-4 py-3 rounded-lg mb-6 shadow-sm">
+              <p className="text-sm font-medium">{message}</p>
             </div>
           )}
 
-          {/* --- Dashboard --- */}
+          {/* Dashboard Content */}
           {tasks.length > 0 && (
-            <div className="space-y-4 sm:space-y-6 md:space-y-8">
-              {/* --- Metrics --- */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-                <div className="bg-white p-4 sm:p-5 md:p-6 rounded-xl shadow-lg transform hover:scale-105 transition-transform">
-                  <p className="text-xs sm:text-sm font-medium text-gray-800">
-                    Total Tasks
-                  </p>
-                  <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mt-1 sm:mt-2"> 
-                    {totalTasks}
-                  </p>
+            <div className="space-y-6 sm:space-y-8">
+              {/* Metrics Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 sm:p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2 bg-indigo-100 rounded-lg">
+                      <ListChecks className="w-5 h-5 text-indigo-600" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 mb-1">Total Tasks</p>
+                  <p className="text-3xl font-bold text-slate-900">{totalTasks}</p>
                 </div>
                 
-                <div className="bg-white p-4 sm:p-5 md:p-6 rounded-xl shadow-lg transform hover:scale-105 transition-transform">
-                  <p className="text-xs sm:text-sm font-medium text-gray-800">
-                    Completed
-                  </p>
-                  <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mt-1 sm:mt-2"> 
-                    {completedTasks}
-                  </p>
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 sm:p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 mb-1">Completed</p>
+                  <p className="text-3xl font-bold text-slate-900">{completedTasks}</p>
                 </div>
                 
-                <div className="bg-white p-4 sm:p-5 md:p-6 rounded-xl shadow-lg transform hover:scale-105 transition-transform">
-                  <p className="text-xs sm:text-sm font-medium text-gray-800">
-                    Avg Completion
-                  </p>
-                  <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mt-1 sm:mt-2"> 
-                    {avgCompletion}%
-                  </p>
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 sm:p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <TrendingUp className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 mb-1">Avg Completion</p>
+                  <p className="text-3xl font-bold text-slate-900">{avgCompletion}%</p>
                 </div>
                 
-                <div className="bg-white p-4 sm:p-5 md:p-6 rounded-xl shadow-lg transform hover:scale-105 transition-transform">
-                  <p className="text-xs sm:text-sm font-medium text-gray-800">
-                    Total Subtasks
-                  </p>
-                  <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mt-1 sm:mt-2"> 
-                    {totalSubtasks}
-                  </p>
+                <div className="bg-white rounded-xl shadow-md border border-slate-200 p-5 sm:p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Clock className="w-5 h-5 text-purple-600" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 mb-1">Total Subtasks</p>
+                  <p className="text-3xl font-bold text-slate-900">{totalSubtasks}</p>
                 </div>
               </div>
 
-              {/* --- Charts --- */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
-                <div className="bg-white/95 backdrop-blur-sm p-4 sm:p-5 md:p-6 rounded-xl shadow-2xl">
-                  <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 text-gray-900">
+              {/* Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+                {/* Bar Chart */}
+                <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-8">
+                  <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mb-6">
                     Task Status by Project
-                  </h2>
-                  <div className="h-64 sm:h-80 md:h-96">
+                  </h3>
+                  <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={projectStatusData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#d4d4d4" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis 
                           dataKey="project" 
-                          tick={{ fill: '#1f2937', fontSize: window.innerWidth < 640 ? 10 : 12 }} 
-                          angle={window.innerWidth < 640 ? -45 : 0}
-                          textAnchor={window.innerWidth < 640 ? "end" : "middle"}
-                          height={window.innerWidth < 640 ? 60 : 30}
+                          tick={{ fill: '#475569', fontSize: 12 }} 
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
                         />
-                        <YAxis tick={{ fill: '#1f2937', fontSize: window.innerWidth < 640 ? 10 : 12 }} />
+                        <YAxis tick={{ fill: '#475569', fontSize: 12 }} />
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                            backgroundColor: '#ffffff', 
                             borderRadius: '8px',
-                            fontSize: window.innerWidth < 640 ? '12px' : '14px'
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                           }} 
                         />
-                        <Legend wrapperStyle={{ fontSize: window.innerWidth < 640 ? '12px' : '14px' }} />
-                        <Bar dataKey="Completed" fill="#15803d" radius={[8, 8, 0, 0]} />
-                        <Bar dataKey="In Progress" fill="#0d9488" radius={[8, 8, 0, 0]} />
-                        <Bar dataKey="Pending" fill="#6d28d9" radius={[8, 8, 0, 0]} />
+                        <Legend />
+                        <Bar dataKey="Completed" fill="#10b981" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="In Progress" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="Pending" fill="#f59e0b" radius={[8, 8, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="bg-white/95 backdrop-blur-sm p-4 sm:p-5 md:p-6 rounded-xl shadow-2xl">
-                  <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 text-gray-900">
+                {/* Overall Completion Pie */}
+                <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-8">
+                  <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mb-6">
                     Overall Completion
-                  </h2>
-                  <div className="h-64 sm:h-80 md:h-96">
+                  </h3>
+                  <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -443,16 +443,13 @@ const ViewTaskPage: React.FC = () => {
                           nameKey="name"
                           cx="50%"
                           cy="50%"
-                          outerRadius={window.innerWidth < 640 ? 60 : window.innerWidth < 1024 ? 90 : 120}
+                          outerRadius={110}
                           labelLine={false}
                           label={(entry: { name?: string; value?: number }) => {
                             const name = entry.name ?? "N/A";
                             const value = entry.value ?? 0;
-                            const total = overallCompletionData.reduce((sum, item) => sum + item.value, 0);
-                            const percentNum = total > 0 ? (value / total) * 100 : 0;
-                            return window.innerWidth < 640 ? `${percentNum.toFixed(0)}%` : `${name}: ${percentNum.toFixed(0)}%`;
+                            return `${value}%`;
                           }}
-                          style={{ fontSize: window.innerWidth < 640 ? '10px' : '12px' }}
                         >
                           {overallCompletionData.map((entry, index) => (
                             <Cell
@@ -464,25 +461,25 @@ const ViewTaskPage: React.FC = () => {
                         <Tooltip 
                           formatter={(v: number, name: string) => [`${v}%`, name]}
                           contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                            backgroundColor: '#ffffff', 
                             borderRadius: '8px',
-                            fontSize: window.innerWidth < 640 ? '12px' : '14px'
+                            border: '1px solid #e2e8f0'
                           }} 
                         />
-                        <Legend wrapperStyle={{ fontSize: window.innerWidth < 640 ? '11px' : '14px' }} />
+                        <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               </div>
 
-              {/* --- Subtasks Chart --- */}
+              {/* Subtasks Chart */}
               {totalSubtasks > 0 && (
-                <div className="bg-white/95 backdrop-blur-sm p-4 sm:p-5 md:p-6 rounded-xl shadow-2xl">
-                  <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 text-gray-900">
+                <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-8">
+                  <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mb-6">
                     Subtasks Status Distribution
-                  </h2>
-                  <div className="h-64 sm:h-80 md:h-96">
+                  </h3>
+                  <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -491,14 +488,13 @@ const ViewTaskPage: React.FC = () => {
                           nameKey="name"
                           cx="50%"
                           cy="50%"
-                          outerRadius={window.innerWidth < 640 ? 60 : window.innerWidth < 1024 ? 90 : 120}
+                          outerRadius={110}
                           labelLine={false}
                           label={(entry: { name?: string; value?: number }) => {
                             const name = entry.name ?? "N/A";
                             const value = entry.value ?? 0;
-                            return window.innerWidth < 640 ? `${value}` : `${name}: ${value}`;
+                            return `${name}: ${value}`;
                           }}
-                          style={{ fontSize: window.innerWidth < 640 ? '10px' : '12px' }}
                         >
                           {subtasksStatusData.map((entry, index) => (
                             <Cell
@@ -509,12 +505,12 @@ const ViewTaskPage: React.FC = () => {
                         </Pie>
                         <Tooltip 
                           contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.98)', 
+                            backgroundColor: '#ffffff', 
                             borderRadius: '8px',
-                            fontSize: window.innerWidth < 640 ? '12px' : '14px'
+                            border: '1px solid #e2e8f0'
                           }} 
                         />
-                        <Legend wrapperStyle={{ fontSize: window.innerWidth < 640 ? '11px' : '14px' }} />
+                        <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

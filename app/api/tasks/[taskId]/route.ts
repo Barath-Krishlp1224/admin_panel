@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Task from "@/models/Task";
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { taskId: string } }
-) {
+// ✅ Remove custom types and let Next.js infer the correct type automatically
+export async function PUT(req: NextRequest, context: any) {
   await connectDB();
 
   try {
-    const taskId = params.taskId?.trim();
+    const taskId = context.params?.taskId?.trim();
     const body = await req.json();
 
     console.log("🟣 Updating task:", taskId);

@@ -60,11 +60,18 @@ const EmployeesPage: React.FC = () => {
       setMessage("❌ Project ID and Project Name are required.");
       return;
     }
+    
+    // Check for a selected assignee
+    if (!formData.assigneeName.trim()) {
+        setMessage("❌ Please select an Assignee.");
+        return;
+    }
 
     try {
       const payload = {
         ...formData,
-        completion: formData.completion === "" ? undefined : Number(formData.completion),
+        // Frontend conversion to Number for completion field
+        completion: formData.completion === "" ? undefined : Number(formData.completion), 
       };
 
       const res = await fetch("/api/tasks/add", {
@@ -101,7 +108,7 @@ const EmployeesPage: React.FC = () => {
     <div className="min-h-screen from-slate-100 via-white to-slate-100 py-12 px-4">
       <div className="mx-auto max-w-5xl">
         <div className="text-center mt-[3%] mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="text-4xl font-bold text-black mb-2">
             Employee's Task Creation
           </h1>
         </div>

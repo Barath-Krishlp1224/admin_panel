@@ -7,7 +7,6 @@ if (!MONGODB_URI) {
   throw new Error("❌ Missing environment variable: MONGODB_URI");
 }
 
-// Global caching to prevent multiple connections in dev/hot reload
 let cached = (global as any)._mongooseCache;
 
 if (!cached) {

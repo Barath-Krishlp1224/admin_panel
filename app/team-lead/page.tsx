@@ -29,7 +29,7 @@ const EmployeesPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => router.push("/view-task")}
+          onClick={() => router.push("/team-lead/assign-task")}
           // Applying the new white box and black text style
           className={buttonClasses} 
         >

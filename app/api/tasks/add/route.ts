@@ -1,4 +1,3 @@
-// /api/tasks/add
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Task from "@/models/Task";
@@ -9,50 +8,53 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Destructure the fields to match the frontend's formData.
-    // NOTE: 'name' is removed from destructuring.
+    console.log("🟡 Incoming Task Data:", body);
+
     const {
+      assigneeName,
+      projectId,
+      project,
       startDate,
       endDate,
       dueDate,
-      empId, // REQUIRED field based on the latest frontend
-      project,
       completion,
       status,
       remarks,
-    } = body; 
+    } = body;
 
-    // ✅ Validate REQUIRED field: empId is the ONLY mandatory field now.
-    if (!empId) {
+    // ✅ Validate required fields
+    if (!assigneeName || !projectId || !project) {
+      console.error("❌ Missing required fields:", { assigneeName, projectId, project });
       return NextResponse.json(
-        { error: "Missing required field: empId" },
+        { error: "Missing required fields: assigneeName, projectId, project" },
         { status: 400 }
       );
     }
 
-    // Create new task with the updated fields
+    // ✅ Create and save new task
     const newTask = new Task({
-      empId,
-      startDate, 
-      endDate,   
-      dueDate,   
+      assigneeName,
+      projectId,
       project,
-      // ❌ Removed 'name' field
-      completion,
-      status,
+      startDate,
+      endDate,
+      dueDate,
+      completion: completion ? Number(completion) : 0,
+      status: status || "In Progress",
       remarks,
     });
 
     const savedTask = await newTask.save();
+    console.log("✅ Task saved successfully:", savedTask);
 
     return NextResponse.json(
-      { message: "Task added successfully", task: savedTask },
+      { success: true, message: "Task added successfully", task: savedTask },
       { status: 201 }
     );
-  } catch (error) {
-    console.error("Error adding task:", error);
+  } catch (error: any) {
+    console.error("🔥 Error adding task:", error.message || error);
     return NextResponse.json(
-      { error: "Failed to add task" },
+      { success: false, error: error.message || "Failed to add task" },
       { status: 500 }
     );
   }

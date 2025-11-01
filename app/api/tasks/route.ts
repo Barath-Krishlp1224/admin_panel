@@ -4,32 +4,46 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Task from "@/models/Task";
 
-// GET → Fetch all tasks for an employee using a query parameter: /api/tasks?empId={id}
-export async function GET(req: NextRequest) {
+/* -------------------------------------------------------------------------- */
+/*                            GET → Fetch All Tasks                           */
+/* -------------------------------------------------------------------------- */
+export async function GET() {
   try {
-    // Assume connectDB is defined in "@/lib/mongodb"
-    await connectDB(); 
-    
-    // Read the empId from the URL Search Params (Query)
-    const searchParams = req.nextUrl.searchParams;
-    const empId = searchParams.get('empId');
+    await connectDB();
 
-    if (!empId) {
-      return NextResponse.json({ message: "Employee ID is required" }, { status: 400 });
-    }
+    // Fetch all tasks (no empId filtering)
+    const tasks = await Task.find().lean();
 
-    console.log("Fetching tasks for empId:", empId);
-
-    // Case-insensitive search on the 'empId' field
-    const tasks = await Task.find({ empId: { $regex: `^${empId}$`, $options: "i" } }).lean();
-
-    // Always return a 200 OK status, even if the array of tasks is empty.
-    return NextResponse.json({ tasks: tasks || [] }, { status: 200 }); 
-    
-  } catch (err) {
+    return NextResponse.json({ success: true, tasks }, { status: 200 });
+  } catch (err: any) {
     console.error("GET Error:", err);
-    return NextResponse.json({ message: "Failed to fetch tasks" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Failed to fetch tasks" },
+      { status: 500 }
+    );
   }
 }
 
-// NOTE: Add POST function here if needed for creating new tasks.
+/* -------------------------------------------------------------------------- */
+/*                           POST → Create a New Task                         */
+/* -------------------------------------------------------------------------- */
+export async function POST(req: NextRequest) {
+  try {
+    await connectDB();
+
+    const data = await req.json();
+
+    const newTask = await Task.create(data);
+
+    return NextResponse.json(
+      { success: true, message: "Task added successfully!", task: newTask },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("POST Error:", error.message);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 400 }
+    );
+  }
+}
